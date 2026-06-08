@@ -1,0 +1,240 @@
+{
+  "title": "The Whispering Catacombs",
+  "theme": "Gothic dungeon crawl",
+  "difficulty": "easy",
+  "goal": "Descend into the catacombs and escape with the Saint's Relic — or at least escape with your life.",
+  "character_template": {
+    "health": 22,
+    "strength": 10,
+    "agility": 10,
+    "stamina": 10
+  },
+  "items": {
+    "lantern": {
+      "name": "Oil Lantern",
+      "icon": "🏮",
+      "description": "Steady flame and a reserve of oil. Use it from your pack to bind wounds and rest (+8 HP).",
+      "use": { "heal": 8 }
+    },
+    "charm": {
+      "name": "Bone Charm",
+      "icon": "🦴",
+      "description": "An old ward against the dark — +3 to Agility checks among the bones."
+    },
+    "iron_key": {
+      "name": "Iron Key",
+      "icon": "🗝️",
+      "description": "Heavy, cold, and older than the city above. Opens the inner sanctum."
+    }
+  },
+  "start_location_id": "crypt_gate",
+  "locations": {
+    "crypt_gate": {
+      "description": "A toothed iron gate yawns at the bottom of the chapel stairs. Cold air breathes out of the dark, carrying a faint, dry whispering. Worn steps lead down; to one side, a rusted grille hides a narrower shortcut.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Descend the worn stairs into the hall",
+          "target_id": "hall"
+        },
+        {
+          "text": "Force the rusted grille for a shortcut",
+          "target_id": "reliquary",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 3
+          }
+        }
+      ]
+    },
+    "hall": {
+      "description": "A long processional hall, its frescoes bleached to ghosts. A dead sconce still cradles an oil lantern, somehow unspent. Two ways onward: an arch of stacked skulls to the east, and a dripping passage sloping down to the west.",
+      "is_end": false,
+      "loot": ["lantern"],
+      "choices": [
+        {
+          "text": "Enter the ossuary beneath the skull arch",
+          "target_id": "ossuary"
+        },
+        {
+          "text": "Follow the dripping passage down to the cistern",
+          "target_id": "cistern"
+        }
+      ]
+    },
+    "ossuary": {
+      "description": "Ten thousand skulls watch from the walls. As you step in, the bones at the far end knit themselves upright into a towering figure of fused vertebrae — a Bone Sentinel, woken to guard the way deeper.",
+      "is_end": false,
+      "monster": {
+        "name": "Bone Sentinel",
+        "strength": 15,
+        "fail_damage": 6,
+        "dice_type": "2d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Slip back to the hall and leave it be",
+          "target_id": "hall",
+          "is_flee": true
+        },
+        {
+          "text": "Topple a roof pillar onto it and slip past",
+          "target_id": "reliquary",
+          "is_flee": true,
+          "condition": {
+            "attribute": "agility",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 6
+          }
+        },
+        {
+          "text": "Advance into the reliquary",
+          "target_id": "reliquary"
+        }
+      ]
+    },
+    "reliquary": {
+      "description": "A vaulted chamber of niches and tarnished offerings. A bone charm hangs from a hook by the door — a pilgrim's ward. At the center, a cracked sarcophagus; beyond it, a sealed sanctum door set with an empty keyhole.",
+      "is_end": false,
+      "loot": ["charm"],
+      "choices": [
+        {
+          "text": "Search the sarcophagus for the sanctum key",
+          "target_id": "sanctum_door",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 3,
+            "item_bonus": { "item": "charm", "bonus": 3 }
+          },
+          "gives_item": "iron_key"
+        },
+        {
+          "text": "Leave the bones and head down to the cistern",
+          "target_id": "cistern"
+        }
+      ]
+    },
+    "sanctum_door": {
+      "description": "The sanctum door is iron-banded oak, swollen with centuries of damp. The keyhole is a cold black slot. Without the right key it will not yield — and the whispering is loudest here.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Unlock the sanctum",
+          "target_id": "inner_sanctum",
+          "requires_item": "iron_key"
+        },
+        {
+          "text": "Abandon the door and retreat to the cistern",
+          "target_id": "cistern"
+        }
+      ]
+    },
+    "inner_sanctum": {
+      "description": "Within rests the Saint's Relic on a bier of salt — a reliquary of gold and glass, untouched by the rot of the place. Lifting it, the whispering finally stills. A narrow flue above promises open sky.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Take the relic and climb to the surface",
+          "target_id": "relic_ending"
+        }
+      ]
+    },
+    "cistern": {
+      "description": "A drowned chamber. Black water fills it to the knees, then the chest, then who knows. A slick stone ledge skirts one wall; somewhere below, a dull glint of gold winks under the surface.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Wade straight across the black water",
+          "target_id": "sealed_well",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 5,
+            "fail_target": "undertow"
+          }
+        },
+        {
+          "text": "Edge along the slick ledge",
+          "target_id": "sealed_well",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          }
+        },
+        {
+          "text": "Dive into the flooded side-shaft after the gold",
+          "target_id": "sunken_vault",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 16,
+            "dice_type": "2d6",
+            "fail_damage": 6
+          }
+        }
+      ]
+    },
+    "undertow": {
+      "description": "The floor drops away and the current takes you, rolling you through black water until you no longer know which way is up. Your lungs burn. Then your hand strikes a grate, and a sliver of dim light.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Kick hard for the surface",
+          "target_id": "sealed_well",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 12,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          }
+        },
+        {
+          "text": "Let the current carry you to the side grate",
+          "target_id": "sealed_well"
+        }
+      ]
+    },
+    "sealed_well": {
+      "description": "An old well shaft, dry now, its stones furred with pale moss. Far above, a coin of grey daylight. Iron rungs climb the wall — half of them rusted to nubs.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Climb the rungs to the surface",
+          "target_id": "escape_ending",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          }
+        }
+      ]
+    },
+    "relic_ending": {
+      "description": "You haul yourself out into a grey dawn, the Saint's Relic cold against your chest. The whispering is gone. Whatever was bound in the catacombs is bound still — and the relic in your hands is worth a kingdom, or a cure, or simply a way home. You walk into the light.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "escape_ending": {
+      "description": "You drag yourself over the well's lip and lie gasping under open sky. No relic, no glory — but the catacombs kept their dead and let you keep your life. Some days, down here, that is the whole of victory.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "sunken_vault": {
+      "description": "Your fingers close on the gold — a fat handful of old coin — just as the silt-choked passage folds shut behind you. The water is rising, the only light is the glint in your fist, and the whispering has started again, much closer now. The catacombs have their offering.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    }
+  }
+}

@@ -1,0 +1,19 @@
+# secrets — never commit
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Generated stories (user content, ephemeral on cloud)
+stories/*.json
+
+# Claude Code internal
+.claude/
+
+# macOS
+.DS_Store
