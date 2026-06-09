@@ -1,0 +1,482 @@
+{
+  "title": "Edik and Del Piero make Juve great again",
+  "theme": "Football Team Juventus",
+  "difficulty": "hard",
+  "goal": "Defeat the corrupt Syndicate and win the Champions League with Edik and Del Piero.",
+  "character_template": {
+    "health": 12,
+    "strength": 10,
+    "agility": 10,
+    "stamina": 10
+  },
+  "items": {
+    "legendary_jersey": {
+      "name": "Del Piero's No. 10 Jersey",
+      "icon": "🎽",
+      "description": "The legendary shirt worn by Alessandro Del Piero. Grants +4 bonus to Agility checks during matches."
+    },
+    "physio_tape": {
+      "name": "Physio Tape",
+      "icon": "🩹",
+      "description": "Can be used to bind wounds and restore 5 HP.",
+      "use": {
+        "heal": 5
+      }
+    },
+    "energy_drink": {
+      "name": "Juve Energy Drink",
+      "icon": "🥤",
+      "description": "Recharges stamina. Restores 4 HP.",
+      "use": {
+        "heal": 4
+      }
+    },
+    "evidence_folder": {
+      "name": "Syndicate Evidence",
+      "icon": "📁",
+      "description": "A folder containing proof of the Syndicate's match-fixing."
+    }
+  },
+  "start_location_id": "start",
+  "locations": {
+    "start": {
+      "description": "You are in the changing room of the Allianz Stadium. Juventus is in a deep crisis, and the corrupt 'Syndicate' controls the league. Edik, the new tactical advisor, is arguing with Alessandro Del Piero about how to save the club.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Search Del Piero's old locker for remnants of past glory.",
+          "target_id": "locker_room"
+        },
+        {
+          "text": "Help Edik sketch out a high-intensity tactical system on the whiteboard.",
+          "target_id": "tactical_board",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "fail_target": "start_exhausted"
+          }
+        }
+      ]
+    },
+    "start_exhausted": {
+      "description": "The tactical session was brutal, and your head is spinning. The weight of Juventus's future is crushing, but there is no time to rest.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Go search the locker room anyway.",
+          "target_id": "locker_room"
+        },
+        {
+          "text": "Head straight to the grueling training pitch.",
+          "target_id": "training_pitch"
+        }
+      ]
+    },
+    "locker_room": {
+      "description": "Amidst the dust, you find a hidden safe behind a vintage posters of Gaetano Scirea. Inside lies Del Piero's pristine legendary jersey.",
+      "is_end": false,
+      "loot": [
+        "legendary_jersey"
+      ],
+      "choices": [
+        {
+          "text": "Head to the Medical Bay to stock up on gear.",
+          "target_id": "medical_bay"
+        },
+        {
+          "text": "Carry the jersey onto the Training Pitch to inspire the squad.",
+          "target_id": "training_pitch"
+        }
+      ]
+    },
+    "tactical_board": {
+      "description": "Edik's masterclass tactical system is complete. It requires extreme precision, but it can tear any corrupt defense to shreds.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Take the tactics straight to the training pitch.",
+          "target_id": "training_pitch"
+        },
+        {
+          "text": "Rest and recover in the Medical Bay first.",
+          "target_id": "medical_bay"
+        }
+      ]
+    },
+    "training_pitch": {
+      "description": "The Juventus squad is waiting on the emerald grass. The sun beats down on the Allianz training grounds. It is time to execute.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Run intensive stamina drills to prepare for high-pressing.",
+          "target_id": "press_room",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          },
+          "gives_item": "physio_tape"
+        },
+        {
+          "text": "Practice Del Piero's signature free-kicks from the edge of the box.",
+          "target_id": "press_room",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "item_bonus": {
+              "item": "legendary_jersey",
+              "bonus": 4
+            }
+          }
+        }
+      ]
+    },
+    "medical_bay": {
+      "description": "The smell of disinfectant fills the air. The team doctors are busy, but you spot valuable medical supplies and energy supplements.",
+      "is_end": false,
+      "loot": [
+        "physio_tape"
+      ],
+      "choices": [
+        {
+          "text": "Rummage through the locked cabinets for experimental energy boosters.",
+          "target_id": "press_room",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 3
+          },
+          "gives_item": "energy_drink"
+        },
+        {
+          "text": "Sneak into the adjacent corporate office to see what the board is hiding.",
+          "target_id": "secret_office"
+        }
+      ]
+    },
+    "secret_office": {
+      "description": "In the dark office, a computer is unlocked. You find encrypted PDFs detailing the Syndicate's plans to rig the upcoming matches and bankrupt Juventus.",
+      "is_end": false,
+      "loot": [
+        "evidence_folder"
+      ],
+      "choices": [
+        {
+          "text": "Copy the files and run to the Press Room to make your stand.",
+          "target_id": "press_room"
+        },
+        {
+          "text": "Slip back to the Medical Bay to avoid being caught.",
+          "target_id": "medical_bay"
+        }
+      ]
+    },
+    "press_room": {
+      "description": "A swarm of aggressive journalists is shouting questions. They accuse Juventus of losing its soul and identity. Edik stands beside you.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Expose the Syndicate's match-fixing files on national TV!",
+          "target_id": "boardroom",
+          "requires_item": "evidence_folder"
+        },
+        {
+          "text": "Deliver a calm, powerful statement to disarm the press.",
+          "target_id": "tunnel",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          }
+        },
+        {
+          "text": "Slam your hands on the table and storm out to the tunnel.",
+          "target_id": "tunnel",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 5
+          }
+        }
+      ]
+    },
+    "boardroom": {
+      "description": "The corrupt directors of the board are trembling. The evidence you leaked has destroyed their leverage, but they make one last desperate attempt to bribe you.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Reject their blood money, kick them out of the club, and head to the tunnel.",
+          "target_id": "tunnel",
+          "heals": 4
+        },
+        {
+          "text": "Take their massive bribe and abandon Edik and Del Piero.",
+          "target_id": "ending_banned"
+        }
+      ]
+    },
+    "tunnel": {
+      "description": "The cold concrete tunnel of the Allianz Stadium. You can hear the thunderous roar of the Bianconeri fans outside. The Champions League Semifinal is about to begin.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Lead the squad onto the pitch to face Inter Milan.",
+          "target_id": "semifinal_pitch"
+        },
+        {
+          "text": "Take a quick detour to the Trophy Room to invoke the spirits of 1996.",
+          "target_id": "trophy_room"
+        }
+      ]
+    },
+    "trophy_room": {
+      "description": "The legendary trophies gleam in the dim spotlight. You feel the immense pressure and pride of wearing the black and white stripes.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Kiss the 1996 European Cup for good fortune.",
+          "target_id": "semifinal_pitch",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 3
+          },
+          "heals": 2
+        },
+        {
+          "text": "Shake off the nerves and sprint directly onto the pitch.",
+          "target_id": "semifinal_pitch"
+        }
+      ]
+    },
+    "semifinal_pitch": {
+      "description": "The pitch is a battlefield. Inter Milan's Syndicate-backed defense is playing incredibly dirty, throwing vicious tackles at Del Piero.",
+      "is_end": false,
+      "monster": {
+        "name": "Inter Milan Defense",
+        "strength": 16,
+        "fail_damage": 5,
+        "dice_type": "2d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Tactical Retreat: Call a quick regroup on the sidelines to change tactics.",
+          "target_id": "halftime_speech",
+          "is_flee": true
+        },
+        {
+          "text": "Press the attack and break through their physical defensive line!",
+          "target_id": "halftime_speech"
+        }
+      ]
+    },
+    "halftime_speech": {
+      "description": "In the dressing room, the team is bruised and down 1-0. Del Piero is limping, and Edik is frantically drawing a new blueprint on the board.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Deliver an emotional, rallying speech to restore the team's spirit.",
+          "target_id": "second_half",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          }
+        },
+        {
+          "text": "Physically push the players to demand absolute, flawless effort.",
+          "target_id": "second_half",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 5
+          }
+        }
+      ]
+    },
+    "second_half": {
+      "description": "You return to the pitch. The crowd is deafening. The match is on the line, and only one brilliant play can save Juventus.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Unleash Del Piero's trademark curling shot from the left wing!",
+          "target_id": "final_tunnel",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 5,
+            "fail_target": "ending_defeat_match",
+            "item_bonus": {
+              "item": "legendary_jersey",
+              "bonus": 4
+            }
+          }
+        },
+        {
+          "text": "Deploy Edik's Catenaccio masterclass to stifle their counters and steal a late goal.",
+          "target_id": "final_tunnel",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 5,
+            "fail_target": "ending_defeat_match"
+          }
+        }
+      ]
+    },
+    "final_tunnel": {
+      "description": "Against all odds, Juventus is in the Champions League Final in Berlin. The ultimate corrupt titans, Syndicate FC, stand in your way. The pressure is suffocating.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "March out to the final battle with Edik at your side.",
+          "target_id": "final_match_first_half"
+        },
+        {
+          "text": "Head to the training bay to patch up the squad's injuries.",
+          "target_id": "final_prep"
+        }
+      ]
+    },
+    "final_prep": {
+      "description": "The tension in the medical room is unbearable. Del Piero is wrapping his knees. You must push your body past its absolute limits.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Undergo a painful painkiller injection to temporarily ignore the damage.",
+          "target_id": "final_match_first_half",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          },
+          "heals": 5
+        }
+      ]
+    },
+    "final_match_first_half": {
+      "description": "The match begins. Syndicate FC's enforcer, Ramos, is playing like a brute, taking out your midfielders with dangerous tackles while the corrupt referee looks away.",
+      "is_end": false,
+      "monster": {
+        "name": "Syndicate Enforcer Ramos",
+        "strength": 17,
+        "fail_damage": 6,
+        "dice_type": "2d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Flee: Pull back your attackers to avoid his brutal tackles.",
+          "target_id": "final_match_second_half",
+          "is_flee": true
+        },
+        {
+          "text": "Jump over his sliding tackle with pure athletic agility!",
+          "target_id": "final_match_second_half"
+        }
+      ]
+    },
+    "final_match_second_half": {
+      "description": "It is the 89th minute, tied at 1-1. The championship, and the survival of Juventus, hangs on a single breath.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Show the referee the Syndicate Evidence folder, forcing him to call a penalty!",
+          "target_id": "penalty_shootout",
+          "requires_item": "evidence_folder"
+        },
+        {
+          "text": "Attempt a majestic, legendary overhead bicycle kick from outside the box!",
+          "target_id": "ending_victory",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 17,
+            "dice_type": "2d6",
+            "fail_damage": 6,
+            "fail_target": "ending_defeat_match",
+            "item_bonus": {
+              "item": "legendary_jersey",
+              "bonus": 4
+            }
+          }
+        },
+        {
+          "text": "Launch a brutal, exhausting box-to-box counterattack.",
+          "target_id": "penalty_shootout",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 16,
+            "dice_type": "2d6",
+            "fail_damage": 6,
+            "fail_target": "ending_defeat_match"
+          }
+        }
+      ]
+    },
+    "penalty_shootout": {
+      "description": "The whistle blows. Full time. The Champions League will be decided by a dramatic penalty shootout. The world is watching.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Del Piero steps up for the final penalty kick. Pure ice in his veins.",
+          "target_id": "ending_victory",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 16,
+            "dice_type": "2d6",
+            "fail_damage": 8,
+            "fail_target": "ending_defeat_match",
+            "item_bonus": {
+              "item": "legendary_jersey",
+              "bonus": 4
+            }
+          }
+        },
+        {
+          "text": "Edik takes the penalty himself with a rocket of a strike.",
+          "target_id": "ending_victory",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 17,
+            "dice_type": "2d6",
+            "fail_damage": 8,
+            "fail_target": "ending_defeat_match"
+          }
+        }
+      ]
+    },
+    "ending_victory": {
+      "description": "GOAL! The ball hits the back of the net! Edik and Del Piero lift the Champions League trophy in Berlin. The Syndicate is dismantled, and Juventus is back on top of the world. FINO ALLA FINE!",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "ending_defeat_match": {
+      "description": "The shot is saved! The whistle blows, and Syndicate FC celebrates their corrupt victory. Juventus falls short, and the dark age of football continues. Edik and Del Piero can only watch in silence.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "ending_banned": {
+      "description": "You accepted the Syndicate's massive bribes. The fraud is eventually uncovered, and Juventus is relegated to Serie C. Edik and Del Piero leave the club in disgrace. You won the money, but lost your soul.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    }
+  }
+}
