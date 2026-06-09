@@ -21,7 +21,7 @@ balance-check the story end to end before handing it back.
 If the user gave a theme in their message, don't re-ask — proceed. Only ask if the
 theme is missing.
 
-## Mandatory workflow — DO ALL FOUR STEPS
+## Mandatory workflow — DO ALL FIVE STEPS
 
 Stories live in the **`stories/`** library — one `*.json` per adventure. Save new stories
 there as `stories/<slug>.json` (slug = lowercase title, e.g. `stories/pirate_ghost_ship.json`).
@@ -32,22 +32,29 @@ The app's main-screen gallery auto-discovers every file in `stories/`.
    ```bash
    python3 cyoa-skills/cyoa-validator/scripts/validate_story.py stories/<slug>.json
    ```
-   If it reports issues, fix them (edit the JSON, or re-run with `--fix` for
-   auto-fixable graph issues) and re-validate until it prints **"No issues found"**.
-3. **Balance-check** against the requested difficulty:
+   Fix any issues (edit the JSON, or `--fix` for auto-fixable graph issues) and re-validate
+   until it prints **"No issues found"**.
+3. **Coherence & pre-history** — the map must read like a real place and open with real backstory:
+   ```bash
+   python3 cyoa-skills/cyoa-validator/scripts/coherence_report.py stories/<slug>.json
+   ```
+   Address every REVIEW item until it prints **"COHERENCE: OK"** (or you can justify a flag,
+   e.g. a deliberate hub). Especially: kill aimless free-movement loops, keep the backtrack
+   ratio low, and write a real `prologue`.
+4. **Balance-check** against the requested difficulty:
    ```bash
    python3 playtest.py stories/<slug>.json <difficulty>
    ```
-   This runs 20k simulated playthroughs per playstyle and prints a PASS/ADJUST verdict.
-   If it says ADJUST, nudge HP / DCs / fail_damage toward the preset and re-run.
-4. **Report**: confirm it is valid + balanced and tell the user it now appears in the
-   library on the main screen (`streamlit run app.py`).
+   Tune HP / DCs / fail_damage toward the preset and re-run until it prints **PASS**.
+5. **Report**: confirm it is valid + coherent + balanced; it now appears in the library on
+   the main screen (`streamlit run app.py`).
 
-Never hand back a story that has not passed steps 2 and 3.
+Never hand back a story that has not passed steps 2, 3 and 4.
 
-> The in-app **"Create a New Story"** page runs this exact pipeline automatically
-> (generate → validate → balance-check → save to `stories/`) using this spec as its
-> system prompt, so keep this file authoritative.
+> The in-app **"Create a New Story"** page runs the generate → validate → balance pipeline
+> automatically using this spec as its system prompt. For the most polished result (coherence
+> pass + repair loop), use the **story-smith** agent (`.claude/agents/story-smith.md`), which
+> runs all five steps and iterates until every gate is green.
 
 ## Story schema (current engine — keep in sync with app.py)
 
@@ -57,6 +64,7 @@ Never hand back a story that has not passed steps 2 and 3.
   "theme": "The theme",
   "difficulty": "normal",                 // metadata; record what you targeted
   "goal": "One sentence describing what winning looks like.",
+  "prologue": "3-6 sentences of pre-history, shown on the character screen before play: who you are, the world, the inciting incident, and the stakes.",
   "character_template": { "health": 18, "strength": 10, "agility": 10, "stamina": 10 },
 
   "items": {                              // OPTIONAL. Every item MUST have a real role.
@@ -157,7 +165,22 @@ heroic death ≥30% (still beatable).
 - **Spread the stats**: use all three of strength/agility/stamina across checks so no
   single dump-stat trivializes or bricks a run.
 
+### Connectivity & opening (what makes a story feel finished, not chaotic)
+- **Coherent map**: design locations as a real place with regions that connect logically.
+  Every choice's destination must follow from its text — no random teleports. Aim for ~2–4
+  choices per location; never exceed 6.
+- **Forward motion**: most choices should advance the story. Keep backtracking low
+  (`coherence_report.py` flags >35%). A hub is fine *only* if each spoke has real content and
+  you cannot circle a set of rooms endlessly at no cost (no aimless free-movement loops).
+- **Critical path + side content**: provide a clear spine from start to a victory, with
+  optional branches — not a soup of cross-links.
+- **Real pre-history**: always write a `prologue` (3–6 sentences) that drops the player into
+  the world — who they are, what just happened, why it matters — then orient them in the
+  start location's opening scene. Thin/missing pre-history is a coherence REVIEW failure.
+
 ## Resources
 - `references/sample_story.json` — a small, clean, schema-complete example (normal difficulty).
-- Validator: `cyoa-skills/cyoa-validator/scripts/validate_story.py`
-- Balance harness: `playtest.py` (repo root) — `python3 playtest.py story.json [easy|normal|hard]`
+- Correctness: `cyoa-skills/cyoa-validator/scripts/validate_story.py`
+- Coherence / pre-history: `cyoa-skills/cyoa-validator/scripts/coherence_report.py`
+- Balance: `playtest.py` (repo root) — `python3 playtest.py <story> [easy|normal|hard]`
+- Orchestrator agent: `.claude/agents/story-smith.md` (runs all gates with a repair loop).

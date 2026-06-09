@@ -3,6 +3,7 @@
   "theme": "Gothic dungeon crawl",
   "difficulty": "easy",
   "goal": "Descend into the catacombs and escape with the Saint's Relic — or at least escape with your life.",
+  "prologue": "Plague has hollowed out the city above, and the priests swear the only cure lies with the Saint's Relic — sealed in the catacombs generations ago, when the dead first began to whisper. Everyone who has gone down for it has stayed down. You took the church's coin anyway: a lantern, a borrowed nerve, and a map that ends at a rusted gate. Tonight the whispering is louder than usual.",
   "character_template": {
     "health": 22,
     "strength": 10,
@@ -14,7 +15,9 @@
       "name": "Oil Lantern",
       "icon": "🏮",
       "description": "Steady flame and a reserve of oil. Use it from your pack to bind wounds and rest (+8 HP).",
-      "use": { "heal": 8 }
+      "use": {
+        "heal": 8
+      }
     },
     "charm": {
       "name": "Bone Charm",
@@ -52,7 +55,9 @@
     "hall": {
       "description": "A long processional hall, its frescoes bleached to ghosts. A dead sconce still cradles an oil lantern, somehow unspent. Two ways onward: an arch of stacked skulls to the east, and a dripping passage sloping down to the west.",
       "is_end": false,
-      "loot": ["lantern"],
+      "loot": [
+        "lantern"
+      ],
       "choices": [
         {
           "text": "Enter the ossuary beneath the skull arch",
@@ -100,7 +105,9 @@
     "reliquary": {
       "description": "A vaulted chamber of niches and tarnished offerings. A bone charm hangs from a hook by the door — a pilgrim's ward. At the center, a cracked sarcophagus; beyond it, a sealed sanctum door set with an empty keyhole.",
       "is_end": false,
-      "loot": ["charm"],
+      "loot": [
+        "charm"
+      ],
       "choices": [
         {
           "text": "Search the sarcophagus for the sanctum key",
@@ -110,7 +117,10 @@
             "check_value": 14,
             "dice_type": "2d6",
             "fail_damage": 3,
-            "item_bonus": { "item": "charm", "bonus": 3 }
+            "item_bonus": {
+              "item": "charm",
+              "bonus": 3
+            }
           },
           "gives_item": "iron_key"
         },

@@ -94,233 +94,13 @@ hr { border-color: #2a2418 !important; margin: 0.8rem 0 !important; }
 
 DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"]
 
-# ── story library / generation config ─────────────────────────────────────────
-STORIES_DIR    = os.environ.get("QUEST_STORIES_DIR", "stories")
-LEGACY_STORY   = os.environ.get("QUEST_STORY", "story.json")
-VALIDATOR_PATH = os.path.join("cyoa-skills", "cyoa-validator", "scripts", "validate_story.py")
-GENERATOR_SPEC = os.path.join("cyoa-skills", "cyoa-generator", "SKILL.md")
-DIFFICULTIES   = ["easy", "normal", "hard"]
-GEN_MAX_TOKENS = 16000
-
-DEFAULT_MODELS = {"google": "gemini-3.5-flash", "anthropic": "claude-sonnet-4-6"}
-PROVIDER_LABEL = {"google": "Google (Gemini)", "anthropic": "Anthropic (Claude)"}
-PROVIDER_PKG   = {"google": "google-genai", "anthropic": "anthropic"}
-
-
-def gen_provider():
-    """Pick the model provider from env (QUEST_GEN_PROVIDER), else whichever API key is set."""
-    p = os.environ.get("QUEST_GEN_PROVIDER", "").strip().lower()
-    if p in ("google", "gemini"):
-        return "google"
-    if p in ("anthropic", "claude"):
-        return "anthropic"
-    if os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY"):
-        return "google"
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return "anthropic"
-    return "google"
-
-
-def gen_default_model(provider):
-    return os.environ.get("QUEST_GEN_MODEL") or DEFAULT_MODELS.get(provider, "")
-
-
-def env_api_key(provider):
-    if provider == "google":
-        return os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY") or ""
-    return os.environ.get("ANTHROPIC_API_KEY") or ""
-
-
-def list_stories():
-    """Metadata for every story in the library (always includes legacy story.json if present)."""
-    paths = sorted(p for p in glob.glob(os.path.join(STORIES_DIR, "*.json"))
-                   if not os.path.basename(p).startswith((".", "_")))
-    if os.path.exists(LEGACY_STORY):
-        paths = [LEGACY_STORY] + paths
-    out = []
-    for p in paths:
-        try:
-            d = json.load(open(p))
-            out.append({
-                "path": p,
-                "title": d.get("title", os.path.basename(p)),
-                "theme": d.get("theme", ""),
-                "difficulty": (d.get("difficulty") or "").lower(),
-                "goal": d.get("goal", ""),
-                "n": len(d.get("locations", {})),
-            })
-        except Exception as e:
-            out.append({"path": p, "title": os.path.basename(p), "error": str(e),
-                        "theme": "", "difficulty": "", "goal": "", "n": 0})
-    return out
-
-
-def load_story_file(path):
-    with open(path, "r") as f:
-        return json.load(f)
-
-
-def slugify(s):
-    s = re.sub(r"[^a-z0-9]+", "_", (s or "").lower()).strip("_")
-    return s[:40] or "story"
-
-
-def unique_story_path(title):
-    os.makedirs(STORIES_DIR, exist_ok=True)
-    base = slugify(title)
-    path = os.path.join(STORIES_DIR, base + ".json")
-    i = 2
-    while os.path.exists(path):
-        path = os.path.join(STORIES_DIR, f"{base}_{i}.json")
-        i += 1
-    return path
-
-
-def save_story_file(story, path):
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(story, f, indent=2, ensure_ascii=False)
-
-
-@lru_cache(maxsize=1)
-def _load_validator():
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("cyoa_validator", VALIDATOR_PATH)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def validate_story_dict(story):
-    """Return a list of human-readable problems. Empty list == valid & complete."""
-    if not isinstance(story, dict):
-        return ["story is not a JSON object"]
-    problems = [f"missing required field '{f}'"
-                for f in ("title", "character_template", "start_location_id", "locations")
-                if f not in story]
-    if problems:
-        return problems
-    locs = story.get("locations") or {}
-    if story["start_location_id"] not in locs:
-        return [f"start_location_id '{story['start_location_id']}' is not a location"]
-    try:
-        _reach, issues = _load_validator().simulate(story)
-        problems += [it["message"] for it in issues]
-    except Exception as e:
-        problems.append(f"validator crashed on this story: {e}")
-    return problems
-
-
-def balance_check(path, difficulty):
-    """Run playtest.py as a quick balance gate. Returns (verdict, [metric lines])."""
-    try:
-        r = subprocess.run(["python3", "playtest.py", path, difficulty],
-                           capture_output=True, text=True, timeout=180)
-        out = r.stdout
-        verdict = "PASS" if ">>> PASS" in out else ("ADJUST" if "ADJUST" in out else "—")
-        lines = [ln.strip() for ln in out.splitlines()
-                 if ln.strip().startswith(("cautious win", "heroic death"))]
-        return verdict, lines
-    except Exception as e:
-        return "—", [f"(balance check unavailable: {e})"]
-
-
-def _extract_json(text):
-    t = (text or "").strip()
-    if t.startswith("```"):
-        t = re.sub(r"^```[a-zA-Z0-9]*\n?", "", t)
-        t = re.sub(r"\n?```$", "", t).strip()
-    a, b = t.find("{"), t.rfind("}")
-    if a == -1 or b == -1 or b < a:
-        return None, "no JSON object found in the model output"
-    try:
-        return json.loads(t[a:b + 1]), None
-    except Exception as e:
-        return None, f"JSON parse error: {e}"
-
-
-def _call_model(provider, model, system, messages, api_key):
-    """One completion from the chosen provider. messages: [{'role':'user'|'assistant','content'}].
-    Returns the model's text. Raises ImportError if the provider SDK isn't installed.
-    Retries up to 4 times with exponential backoff on 503 / rate-limit errors."""
-    _RETRYABLE = ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED", "rate_limit", "overloaded")
-    max_retries, delay = 4, 3
-
-    for attempt in range(max_retries + 1):
-        try:
-            if provider == "anthropic":
-                import anthropic
-                client = anthropic.Anthropic(api_key=api_key)
-                msg = client.messages.create(
-                    model=model, max_tokens=GEN_MAX_TOKENS, system=system,
-                    messages=[{"role": m["role"], "content": m["content"]} for m in messages],
-                )
-                return "".join(getattr(b, "text", "") for b in msg.content
-                               if getattr(b, "type", "") == "text")
-            # default: Google Gemini
-            from google import genai
-            from google.genai import types
-            client = genai.Client(api_key=api_key)
-            contents = [types.Content(role=("model" if m["role"] == "assistant" else "user"),
-                                      parts=[types.Part(text=m["content"])]) for m in messages]
-            resp = client.models.generate_content(
-                model=model, contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system,
-                    max_output_tokens=GEN_MAX_TOKENS,
-                    temperature=0.9,
-                    response_mime_type="application/json",
-                ),
-            )
-            return resp.text or ""
-
-        except Exception as e:
-            err = str(e)
-            if attempt < max_retries and any(k in err for k in _RETRYABLE):
-                time.sleep(delay)
-                delay *= 2
-                continue
-            raise
-
-
-def generate_story_api(theme, difficulty, length, title_hint, api_key, provider, model):
-    """Author a story via the chosen provider; validate + repair up to 3 times.
-    Returns (story_or_None, problems_list) — problems empty == ready to save."""
-    spec = open(GENERATOR_SPEC).read() if os.path.exists(GENERATOR_SPEC) else ""
-    system = (
-        "You are the story generator for the Quest Book CYOA engine. Return exactly ONE "
-        "story as a single JSON object that conforms to the specification below. Output "
-        "ONLY the JSON object — no prose, no markdown, no code fences.\n\n"
-        "=== SPECIFICATION ===\n" + spec
-    )
-    user = (
-        f"Theme: {theme}\n"
-        f"Difficulty: {difficulty}\n"
-        f"Target size: about {length} locations, with 3-5 endings (include at least one "
-        f"non-victory ending using is_victory:false).\n"
-        + (f'Preferred title: "{title_hint}"\n' if title_hint else "")
-        + f'Set the top-level "difficulty" field to "{difficulty}" and tune health, check DCs, '
-          f"fail_damage and monsters to the {difficulty} preset in the spec. Every location must "
-          f"be reachable and able to reach an ending; no dead items; no zero-cost infinite-retry "
-          f"checks; give every monster a flee or alternate route."
-    )
-    messages = [{"role": "user", "content": user}]
-    story, problems = None, ["no output produced"]
-    for _ in range(3):
-        text = _call_model(provider, model, system, messages, api_key)
-        story, perr = _extract_json(text)
-        if story is None:
-            messages += [{"role": "assistant", "content": text or ""},
-                         {"role": "user", "content": f"{perr}. Resend ONLY the corrected, complete JSON object."}]
-            problems = [perr]
-            continue
-        problems = validate_story_dict(story)
-        if not problems:
-            return story, []
-        messages += [{"role": "assistant", "content": json.dumps(story)},
-                     {"role": "user", "content": "The story failed validation. Fix ALL of these and "
-                      "resend ONLY the full corrected JSON:\n- " + "\n- ".join(problems[:25])}]
-    return story, problems
+from story_engine import (  # Streamlit-free core (shared with story_agent.py)
+    DIFFICULTIES, PROVIDER_LABEL, PROVIDER_PKG,
+    gen_provider, gen_default_model, env_api_key,
+    list_stories, load_story_file, unique_story_path, save_story_file,
+    validate_story_dict, balance_check, generate_story_api,
+    gen_models, create_story,
+)
 
 
 # ── dice & text helpers ───────────────────────────────────────────────────────
@@ -583,6 +363,15 @@ def show_char_creation(story):
         st.rerun()
     st.markdown("<h1>⚔️ Forge Your Character</h1>", unsafe_allow_html=True)
 
+    if story.get("prologue"):
+        st.markdown(
+            f"<div style='background:#100d08;border:1px solid #2a2418;border-left:3px solid #6a5a2a;"
+            f"border-radius:0 6px 6px 0;padding:1.1rem 1.4rem;margin:0.6rem 0;"
+            f"font-family:\"Special Elite\",Georgia,serif;font-size:0.98rem;line-height:1.85;"
+            f"color:#bfae8e'>{story['prologue']}</div>",
+            unsafe_allow_html=True,
+        )
+
     if story.get("goal"):
         st.markdown(
             f"<div style='background:#0f1a0f;border:1px solid #2a4a2a;border-radius:4px;"
@@ -701,6 +490,14 @@ def _difficulty_badge(diff):
             f"letter-spacing:1px'>{(diff or '—').upper()}</span>")
 
 
+def _draft_badge(is_draft):
+    if not is_draft:
+        return ""
+    return ("<span style='background:#2a1c08;color:#e0a64a;border:1px solid #e0a64a55;"
+            "border-radius:10px;padding:1px 8px;font-size:0.7rem;font-family:monospace;"
+            "letter-spacing:1px;margin-right:5px'>DRAFT</span>")
+
+
 def show_library():
     st.markdown("<h1>📖 Quest Book</h1>", unsafe_allow_html=True)
     st.caption("Choose your adventure — or forge a new one.")
@@ -730,7 +527,7 @@ def show_library():
                 f"padding:0.9rem 1.1rem;margin:0.3rem 0;min-height:9rem'>"
                 f"<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:8px'>"
                 f"<span style='color:#d4a843;font-family:\"Special Elite\",Georgia,serif;font-size:1.05rem;line-height:1.3'>{s['title']}</span>"
-                f"{_difficulty_badge(s['difficulty'])}</div>"
+                f"<span style='white-space:nowrap'>{_draft_badge(s.get('draft'))}{_difficulty_badge(s['difficulty'])}</span></div>"
                 f"<div style='color:#6a5a42;font-size:0.74rem;font-family:monospace;margin:0.25rem 0 0.5rem'>"
                 f"🌍 {s['theme']} · {s['n']} locations</div>"
                 f"<div style='color:#a99878;font-size:0.84rem;line-height:1.5'>{goal}</div></div>",
@@ -756,23 +553,41 @@ def _push_story_to_git(path):
 
 
 def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model):
+    # The chosen model is tried first; the rest of the provider's chain are automatic
+    # fallbacks if it hits a free-tier limit. create_story runs the FULL gated pipeline
+    # (validate -> coherence -> balance, with repair) and only returns ok=True once a story
+    # passes every gate — so a story can't enter the library unless it's fully game-ready.
+    models = [model] + [m for m in gen_models(provider) if m != model]
     try:
-        story, problems = generate_story_api(theme, difficulty, length, title_hint,
-                                             api_key, provider, model)
+        ok, path, summary = create_story(theme, difficulty, length, title_hint, api_key,
+                                         provider=provider, models=models, max_attempts=5,
+                                         keep_best=True)
     except ImportError:
         pkg = PROVIDER_PKG.get(provider, provider)
         return {"ok": False, "errors": [f"The '{pkg}' Python package isn't installed. "
                                         f"Install it with:  pip install {pkg}"]}
     except Exception as e:
-        return {"ok": False, "errors": [f"API call failed: {e}"]}
-    if story and not problems:
-        path = unique_story_path(story.get("title") or theme)
-        save_story_file(story, path)
+        return {"ok": False, "errors": [f"Generation failed: {e}"]}
+    if ok:
         _push_story_to_git(path)
-        verdict, vlines = balance_check(path, difficulty)
-        return {"ok": True, "path": path, "title": story.get("title") or theme,
-                "verdict": verdict, "vlines": vlines}
-    return {"ok": False, "errors": problems or ["The model could not produce a valid story."]}
+        title = load_story_file(path).get("title") or theme
+        return {"ok": True, "path": path, "title": title,
+                "verdict": summary["balance"], "vlines": summary["bal_lines"], "gates": summary}
+    if path:   # gates not fully met / a model limit was hit — best draft was kept
+        _push_story_to_git(path)
+        title = load_story_file(path).get("title") or theme
+        reasons = []
+        if summary and not summary.get("correctness"):
+            reasons.append("valid links/reachability")
+        if summary and not summary.get("coherence"):
+            reasons.append("coherence (loops or thin opening)")
+        if summary and summary.get("balance") != "PASS":
+            reasons.append(f"balance ({summary.get('balance')}) for '{difficulty}'")
+        return {"ok": False, "draft": True, "path": path, "title": title, "reasons": reasons,
+                "verdict": (summary or {}).get("balance", "—"),
+                "vlines": (summary or {}).get("bal_lines", []),
+                "limit": (summary or {}).get("limit_error")}
+    return {"ok": False, "errors": ["The model could not produce any usable story (try again, or check your API key)."]}
 
 
 def show_create_page():
@@ -786,10 +601,7 @@ def show_create_page():
     if res is not None:
         if res.get("ok"):
             st.success(f"Created **“{res['title']}”** — saved to `{res['path']}`.")
-            badge = {"PASS": "✅ balanced for its difficulty",
-                     "ADJUST": "⚠ slightly off target difficulty (still valid & playable)"}.get(res.get("verdict"), "")
-            if badge:
-                st.caption(f"Balance: {badge}")
+            st.caption("Passed every gate: validate ✓ · coherence ✓ · balance PASS")
             for ln in res.get("vlines", []):
                 st.caption(f"· {ln}")
             c1, c2 = st.columns(2)
@@ -799,8 +611,23 @@ def show_create_page():
             if c2.button("✨  Create another", use_container_width=True):
                 st.session_state.pop("gen_result", None)
                 st.rerun()
+        elif res.get("draft"):
+            st.warning(f"Saved **“{res['title']}”** as a **draft** — it didn't fully pass: "
+                       + (", ".join(res.get("reasons", [])) or "some gates") + ".")
+            if res.get("limit"):
+                st.caption(f"A model limit was hit mid-run ({str(res['limit'])[:100]}…), so it stopped early.")
+            st.caption("It's in your library marked **DRAFT** — playable now, or regenerate later for a clean version.")
+            for ln in res.get("vlines", []):
+                st.caption(f"· {ln}")
+            c1, c2 = st.columns(2)
+            if c1.button("▶  Play the draft", use_container_width=True):
+                select_story(res["path"])
+                st.rerun()
+            if c2.button("✨  Try again", use_container_width=True):
+                st.session_state.pop("gen_result", None)
+                st.rerun()
         else:
-            st.error("Couldn't generate a valid story. Try again, or tweak the theme.")
+            st.error("Couldn't generate a usable story. Try again, or tweak the theme.")
             for e in res.get("errors", [])[:12]:
                 st.caption(f"· {e}")
             if st.button("↩  Try again", use_container_width=True):
@@ -811,8 +638,9 @@ def show_create_page():
     st.markdown(
         "<div style='background:#141008;border-left:3px solid #8b6914;border-radius:0 6px 6px 0;"
         "padding:1rem 1.3rem;margin:0.4rem 0 1rem;color:#c8b49a;font-size:0.9rem;line-height:1.6'>"
-        "Describe a setting and pick a difficulty. Claude writes a full branching adventure, then "
-        "the app validates and balance-checks it before adding it to your library."
+        "Describe a setting and pick a difficulty. The model writes a full branching adventure, then "
+        "it must pass the validate → coherence → balance gates (auto-repairing on failure) before it's "
+        "added to your library — so every story is consistent, well-connected, and ready to play."
         "</div>", unsafe_allow_html=True)
 
     theme = st.text_input("Theme / setting",
@@ -828,6 +656,8 @@ def show_create_page():
         provider = st.selectbox("Provider", provs, index=provs.index(detected),
                                 format_func=lambda p: PROVIDER_LABEL[p])
         model = st.text_input("Model", value=gen_default_model(provider), key=f"model_{provider}")
+        st.caption("If this model hits its free-tier limit mid-run, the agent auto-switches to the "
+                   "rest of the chain (customize with `QUEST_GEN_MODELS`).")
         env_key = env_api_key(provider)
         if env_key:
             api_key = env_key
@@ -844,8 +674,9 @@ def show_create_page():
             st.warning(f"A {PROVIDER_LABEL[provider]} API key is required "
                        "(set it in the environment or paste it under **Model & API key**).")
         else:
-            with st.spinner("Summoning a new world… the model is writing it and the validator is "
-                            "checking every path. This can take up to a minute."):
+            with st.spinner("Summoning a new world… the model writes it, then it must pass the "
+                            "validate → coherence → balance gates (auto-repairing, and switching "
+                            "models if a free-tier limit is hit). This can take a couple of minutes."):
                 st.session_state.gen_result = _do_generate(
                     theme.strip(), difficulty, length, title_hint.strip(), api_key, provider, model)
             st.rerun()

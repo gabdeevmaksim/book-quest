@@ -3,6 +3,7 @@
   "theme": "Gothic dungeon crawl",
   "difficulty": "easy",
   "goal": "Descend into the catacombs and escape with the Saint's Relic — or at least escape with your life.",
+  "prologue": "Plague has hollowed out the city above, and the priests swear the only cure lies with the Saint's Relic — sealed in the catacombs generations ago, when the dead first began to whisper. Everyone who has gone down for it has stayed down. You took the church's coin anyway: a lantern, a borrowed nerve, and a map that ends at a rusted gate. Tonight the whispering is louder than usual.",
   "character_template": {
     "health": 22,
     "strength": 10,

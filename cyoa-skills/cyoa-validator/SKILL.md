@@ -23,7 +23,12 @@ This skill ensures that a generated CYOA story is logically sound and playable f
 
 ## Usage
 
-Run the validator script:
+Check correctness (links, reachability, can-reach-an-ending):
 ```bash
 python3 scripts/validate_story.py story.json
+```
+
+Check connectivity & pre-history (flags chaotic/disconnected maps and thin openings):
+```bash
+python3 scripts/coherence_report.py story.json
 ```

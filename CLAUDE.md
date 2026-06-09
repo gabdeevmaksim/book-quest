@@ -29,19 +29,28 @@ set in the environment or pasted into the Create page.
 
 ## Story Pipeline
 
-1. **Create** a story one of two ways:
-   - **In-app**: *Create a New Story* → enter a theme + difficulty → Claude writes it, and
-     the app auto-validates, balance-checks, and saves it to `stories/`.
-   - **From the skill / Claude Code**: the `cyoa-generator` skill writes `stories/<slug>.json`.
-2. **Validate** link integrity & reachability:
+Two orchestrators run the whole pipeline (draft → validate → coherence → balance, with a repair
+loop): the **`story-smith` agent** (`.claude/agents/story-smith.md`, for Claude Code), and the
+standalone **`story_agent.py`** CLI, which needs only a free Google Gemini key — no Claude Code,
+no Anthropic (`GOOGLE_API_KEY=… python3 story_agent.py "<theme>" -d hard`). Manually, the steps are:
+
+1. **Create** a story:
+   - **In-app**: *Create a New Story* → theme + difficulty → the app writes it (Gemini/Claude),
+     auto-validates + balance-checks, and saves to `stories/`.
+   - **Skill / agent**: the `cyoa-generator` skill or `story-smith` agent writes `stories/<slug>.json`.
+2. **Validate** links & reachability:
    ```bash
    python3 cyoa-skills/cyoa-validator/scripts/validate_story.py stories/<slug>.json
    ```
-3. **Balance-check** against the target difficulty (PASS / ADJUST verdict):
+3. **Coherence & pre-history** (flags chaotic maps, free-movement loops, thin openings):
+   ```bash
+   python3 cyoa-skills/cyoa-validator/scripts/coherence_report.py stories/<slug>.json
+   ```
+4. **Balance-check** vs the target difficulty (PASS / ADJUST verdict):
    ```bash
    python3 playtest.py stories/<slug>.json [easy|normal|hard]
    ```
-4. **Play** – launch the app; the gallery auto-discovers every `stories/*.json`.
+5. **Play** – launch the app; the gallery auto-discovers every `stories/*.json`.
 
 ## Architecture
 
@@ -62,7 +71,7 @@ and a way back to the library — but you should still validate every story.
 
 **Story schema** (all engine-honored fields):
 ```
-title, theme, difficulty, goal,
+title, theme, difficulty, goal, prologue,
 character_template { health, strength, agility, stamina },
 items { id: { name, icon, description, use?:{heal:N} } },
 start_location_id,
@@ -81,10 +90,29 @@ locations { id: {
 - `cyoa-generator`: the authoritative story-generation spec (schema, design rules, difficulty
   presets). Also used verbatim as the system prompt by the in-app generator.
 - `cyoa-validator`: `validate_story.py` — link/reachability/reach-an-ending checks
-  (cycle-safe reverse-reachability) with an optional `--fix`.
+  (cycle-safe reverse-reachability) with an optional `--fix`; and `coherence_report.py` —
+  connectivity + pre-history linter (free-movement loops, backtrack ratio, prologue/opening),
+  prints `COHERENCE: OK`/`REVIEW`.
+
+**`.claude/agents/story-smith.md`** — orchestrator subagent that runs the whole pipeline
+(draft → validate → coherence → balance) with a repair loop; also audits/repairs existing stories.
 
 **`playtest.py`** — Monte-Carlo balance harness. `python3 playtest.py <story> [difficulty]`
 runs 20k playthroughs across random/cautious/heroic policies and prints a difficulty verdict.
+
+**`story_engine.py`** — Streamlit-free core shared by `app.py` and `story_agent.py`: provider
+config, the model call with retry/backoff + **`call_with_fallback`** (advances down a model chain
+when one hits its free-tier limit), prompt builders, the three gates
+(`validate_story_dict`/`coherence_check`/`balance_check`), and **`create_story`** — the enforced
+pipeline that loops draft → validate → coherence → balance with repair and saves only when every
+gate is green. Both the in-app Create page (`_do_generate`) and `story_agent.py` call
+`create_story`, so passing all gates is a necessary step for any story to enter the library.
+`app.py` imports from it, so the engine module must ship alongside the app (it's in the Dockerfile).
+
+**`story_agent.py`** — standalone CLI orchestrator. Drafts via the chosen provider and loops
+draft → validate → coherence → balance until all gates pass, then saves to `stories/`. Needs only
+`google-genai` + a free `GOOGLE_API_KEY`; runs on any server. `--audit <story.json>` gate-checks
+an existing story without generating.
 
 ## Key Constraints
 
@@ -103,8 +131,18 @@ Paths: `QUEST_STORIES_DIR` (`stories`), `QUEST_STORY` (`story.json`, legacy fall
 
 In-app generation is **provider-agnostic** — it auto-selects from whichever key is set, or
 honors `QUEST_GEN_PROVIDER` (`google` | `anthropic`):
-- **Google Gemini** (default): `GOOGLE_API_KEY` (or `GEMINI_API_KEY`); default model `gemini-3.5-flash`.
-- **Anthropic Claude**: `ANTHROPIC_API_KEY`; default model `claude-sonnet-4-6`.
+- **Google Gemini** (default): `GOOGLE_API_KEY` (or `GEMINI_API_KEY`); chain `gemini-3.5-flash → gemini-2.5-flash → gemini-2.5-flash-lite`.
+- **Anthropic Claude**: `ANTHROPIC_API_KEY`; chain `claude-sonnet-4-6 → claude-haiku-4-5-20251001`.
 
-`QUEST_GEN_MODEL` overrides the model for the active provider. There is still no `config.yaml`;
-if you add more hardcoded paths, consider introducing one.
+**Model fallback:** generation tries the models in order and auto-advances to the next when one
+hits its free-tier limit (or is unavailable). `QUEST_GEN_MODELS="m1,m2,..."` sets the chain;
+`QUEST_GEN_MODEL="m"` pins a single model. There is still no `config.yaml`; if you add more
+hardcoded paths, consider introducing one.
+
+## License
+
+`LICENSE` is the **PolyForm Noncommercial License 1.0.0** — the software may be used only for
+noncommercial purposes (personal/hobby use, and charities, schools, research, and other
+nonprofit organizations all qualify). Commercial use is not granted. This is source-available,
+not OSI open-source. Third-party dependencies (Streamlit, google-genai, anthropic) keep their
+own licenses.

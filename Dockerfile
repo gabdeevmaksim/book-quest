@@ -19,6 +19,8 @@ RUN pip3 install -r requirements.txt
 
 # Copy the rest of the application code into the container
 COPY app.py .
+COPY story_engine.py .
+COPY story_agent.py .
 COPY playtest.py .
 COPY story.json .
 COPY stories/ ./stories/
