@@ -1,0 +1,440 @@
+{
+  "title": "The Banshee's Wail",
+  "theme": "Pirate ghost ship",
+  "difficulty": "hard",
+  "goal": "Infiltrate the cursed spectral galleon, defeat the undead captain, and break the curse or escape with your life.",
+  "character_template": {
+    "health": 12,
+    "strength": 10,
+    "agility": 10,
+    "stamina": 10
+  },
+  "items": {
+    "holy_water": {
+      "name": "Blessed Holy Water",
+      "icon": "🧪",
+      "description": "Glowing water that burns the undead. Consuming it restores 6 HP.",
+      "use": {
+        "heal": 6
+      }
+    },
+    "silver_cutlass": {
+      "name": "Silver Cutlass",
+      "icon": "⚔️",
+      "description": "An elegant blade of pure silver. Grants +3 to Strength-based checks to break doors or strike obstacles."
+    },
+    "captain_key": {
+      "name": "Captain's Key",
+      "icon": "🗝️",
+      "description": "An ornate brass key decorated with a laughing skull. Unlocks the Captain's Cabin."
+    },
+    "spectral_lantern": {
+      "name": "Spectral Lantern",
+      "icon": "🏮",
+      "description": "An eerie green lantern. Reveals hidden passages and grants +3 to Agility checks in high places."
+    }
+  },
+  "start_location_id": "start",
+  "locations": {
+    "start": {
+      "description": "You stand on the rotting main deck of 'The Banshee's Wail', a legendary ghost galleon. Green ectoplasmic fog rolls across the splintered floorboards, and the tattered black sails howl in the freezing gale.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Slink forward toward the Forecastle",
+          "target_id": "forecastle"
+        },
+        {
+          "text": "Clamber up to the slippery Quarterdeck",
+          "target_id": "quarterdeck",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          }
+        },
+        {
+          "text": "Descend into the dark, flooded Cargo Hold",
+          "target_id": "cargo_hold",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          }
+        }
+      ]
+    },
+    "forecastle": {
+      "description": "The forecastle is littered with rusted cannons and skeletal remains fused to the wood. Tucked inside a shattered locker, you spot a strange, glowing vial.",
+      "is_end": false,
+      "loot": [
+        "holy_water"
+      ],
+      "choices": [
+        {
+          "text": "Enter the ship's dark Galley",
+          "target_id": "galley"
+        },
+        {
+          "text": "Return to the main deck",
+          "target_id": "start"
+        }
+      ]
+    },
+    "galley": {
+      "description": "The galley smells of ancient rot and brine. A terrifying specter clad in a bloodstained apron stands by the iron stove, wielding a massive meat cleaver!",
+      "is_end": false,
+      "monster": {
+        "name": "Ghost Cook",
+        "strength": 16,
+        "fail_damage": 8,
+        "dice_type": "2d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Flee back to the forecastle!",
+          "target_id": "forecastle",
+          "is_flee": true
+        },
+        {
+          "text": "Search the ransacked cupboards",
+          "target_id": "galley_search",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          }
+        },
+        {
+          "text": "Descend the creaking stairs to the Bilge",
+          "target_id": "bilge"
+        },
+        {
+          "text": "Head back to the flooded Cargo Hold",
+          "target_id": "cargo_hold"
+        }
+      ]
+    },
+    "galley_search": {
+      "description": "You dig through the moldering cupboards. Hidden behind a pile of cracked plates, you discover an eerie, glowing green lantern.",
+      "is_end": false,
+      "loot": [
+        "spectral_lantern"
+      ],
+      "choices": [
+        {
+          "text": "Go down to the Bilge",
+          "target_id": "bilge"
+        },
+        {
+          "text": "Go to the Cargo Hold",
+          "target_id": "cargo_hold"
+        }
+      ]
+    },
+    "quarterdeck": {
+      "description": "The quarterdeck overlooks the chaotic ocean. The wheel spins wildly on its own, steered by an invisible force. Ahead lies the heavily reinforced door to the Captain's Cabin.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Approach the Captain's Cabin Door",
+          "target_id": "captains_cabin_door"
+        },
+        {
+          "text": "Scale the moldering rigging to the Crow's Nest",
+          "target_id": "rigging_climb"
+        },
+        {
+          "text": "Go back down to the Main Deck",
+          "target_id": "start"
+        }
+      ]
+    },
+    "rigging_climb": {
+      "description": "You scale the freezing, icy ropes. The wind screams in your ears, threatening to tear you from the mast. It is dark and perilous up here.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Ascend to the Crow's Nest",
+          "target_id": "crow_nest",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 5,
+            "fail_target": "deck_fall",
+            "item_bonus": {
+              "item": "spectral_lantern",
+              "bonus": 3
+            }
+          }
+        },
+        {
+          "text": "Retreat down to the safety of the Quarterdeck",
+          "target_id": "quarterdeck"
+        }
+      ]
+    },
+    "deck_fall": {
+      "description": "You lose your footing on the icy, rotten ropes and plummet toward the hard deck below!",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Try to break your fall on the frozen cargo netting",
+          "target_id": "cargo_hold",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 5,
+            "fail_target": "dead_shattered"
+          }
+        }
+      ]
+    },
+    "dead_shattered": {
+      "description": "You crash violently onto the splintered wood of the deck, your bones shattered. The freezing fog rolls over your lifeless body as you join the ghost crew.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "crow_nest": {
+      "description": "High above the ship, the Crow's Nest sways violently. Clutched in the skeletal hand of a dead lookout is a heavy brass key decorated with a laughing skull.",
+      "is_end": false,
+      "loot": [
+        "captain_key"
+      ],
+      "choices": [
+        {
+          "text": "Slide down the zip-line to the Quarterdeck",
+          "target_id": "quarterdeck",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          }
+        },
+        {
+          "text": "Climb down carefully",
+          "target_id": "quarterdeck"
+        }
+      ]
+    },
+    "cargo_hold": {
+      "description": "The cargo hold is flooded waist-deep with freezing, salty seawater. Floating debris knocks against your legs. Half-submerged in a corner is a brilliant silver cutlass.",
+      "is_end": false,
+      "loot": [
+        "silver_cutlass"
+      ],
+      "choices": [
+        {
+          "text": "Wade deeper into the freezing Bilge",
+          "target_id": "bilge"
+        },
+        {
+          "text": "Return up to the Main Deck",
+          "target_id": "start"
+        }
+      ]
+    },
+    "bilge": {
+      "description": "The deepest, darkest part of the ship. The water is chest-high, and a terrifying, bloated drowned sailor rises from the depths, brandishing a rusty anchor!",
+      "is_end": false,
+      "monster": {
+        "name": "Drowned Sailor",
+        "strength": 16,
+        "fail_damage": 8,
+        "dice_type": "2d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Scramble back to the Cargo Hold!",
+          "target_id": "cargo_hold",
+          "is_flee": true
+        },
+        {
+          "text": "Swim into the flooded, iron-barred Armory",
+          "target_id": "flooded_armory",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          }
+        },
+        {
+          "text": "Examine the glowing hull breach with your lantern",
+          "target_id": "captains_quarters_secret",
+          "requires_item": "spectral_lantern"
+        }
+      ]
+    },
+    "flooded_armory": {
+      "description": "Rusty swords and heavy chains float in this submerged chamber. A heavy iron grate stands between you and a glowing chest of supplies.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Dredge the weapon chests for supplies",
+          "target_id": "armory_loot",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 5,
+            "fail_target": "trap_death"
+          }
+        },
+        {
+          "text": "Swim back to the freezing Bilge",
+          "target_id": "bilge"
+        }
+      ]
+    },
+    "armory_loot": {
+      "description": "You successfully bypass the trap and fish out a well-preserved vial of holy water from the chest!",
+      "is_end": false,
+      "loot": [
+        "holy_water"
+      ],
+      "choices": [
+        {
+          "text": "Swim back to the Bilge",
+          "target_id": "bilge"
+        }
+      ]
+    },
+    "trap_death": {
+      "description": "As you reach for the chest, a heavy iron grate slams shut above you, pinning you underwater. You struggle in vain as your lungs fill with freezing brine.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "captains_quarters_secret": {
+      "description": "The eerie light of your spectral lantern reveals a hidden, dry elevator shaft that leads straight up into the Captain's private quarters, completely bypassing the locked door.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Climb up the dry shaft",
+          "target_id": "captains_quarters"
+        }
+      ]
+    },
+    "captains_cabin_door": {
+      "description": "The heavy oak door to the Captain's quarters is reinforced with black iron bands. Eerie, ghostly laughter echoes from within.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Unlock the heavy door",
+          "target_id": "captains_quarters",
+          "requires_item": "captain_key"
+        },
+        {
+          "text": "Smash the door down with brute force",
+          "target_id": "captains_quarters",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 5,
+            "item_bonus": {
+              "item": "silver_cutlass",
+              "bonus": 3
+            }
+          }
+        },
+        {
+          "text": "Return to the Quarterdeck",
+          "target_id": "quarterdeck"
+        }
+      ]
+    },
+    "captains_quarters": {
+      "description": "The cabin is filled with old maps, glowing hourglasses, and cursed relics. Sitting upon a throne of bones is the dread Ghost Captain Redbeard, his eyes burning with green fire!",
+      "is_end": false,
+      "monster": {
+        "name": "Ghost Captain Redbeard",
+        "strength": 17,
+        "fail_damage": 9,
+        "dice_type": "2d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Flee back out to the Quarterdeck!",
+          "target_id": "quarterdeck",
+          "is_flee": true
+        },
+        {
+          "text": "Approach the glowing, cursed relics",
+          "target_id": "captains_quarters_post"
+        }
+      ]
+    },
+    "captains_quarters_post": {
+      "description": "With the Captain vanquished, his spectral power temporarily fades. Before you lies his legendary Aztec gold chest, a magical swirling hourglass keeping the ship cursed, and his escape dinghy.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Seize the heavy, cursed Aztec gold chest",
+          "target_id": "ending_rich",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 16,
+            "dice_type": "2d6",
+            "fail_damage": 8,
+            "fail_target": "ending_curse"
+          }
+        },
+        {
+          "text": "Shatter the magical hourglass to break the curse",
+          "target_id": "ending_heroic",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 16,
+            "dice_type": "2d6",
+            "fail_damage": 8,
+            "fail_target": "ending_curse",
+            "item_bonus": {
+              "item": "silver_cutlass",
+              "bonus": 3
+            }
+          }
+        },
+        {
+          "text": "Lower yourself into the escape dinghy and flee",
+          "target_id": "ending_coward"
+        }
+      ]
+    },
+    "ending_rich": {
+      "description": "You successfully heave the heavy chest into the dinghy and row away. As the dawn breaks, the ghostly ship vanishes, leaving you filthy rich but forever haunted by what you saw.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "ending_heroic": {
+      "description": "With a swift blow, you shatter the magical hourglass. A blinding white light erupts, freeing the trapped souls of the damned crew. The ship crumbles to dust, and you wash ashore, hailed as a legendary hero.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "ending_coward": {
+      "description": "You flee into the night empty-handed. You survived the legendary ghost ship, but your pride is wounded, and you will spend the rest of your days wondering what might have been.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "ending_curse": {
+      "description": "The curse lashes out in a wave of dark energy, overwhelming your senses. Your flesh decays, your mind slips away, and you take your place at the wheel of 'The Banshee's Wail' for eternity.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    }
+  }
+}

@@ -132,11 +132,11 @@ def env_api_key(provider):
 
 
 def list_stories():
-    """Metadata for every story in the library (falls back to a single legacy story.json)."""
+    """Metadata for every story in the library (always includes legacy story.json if present)."""
     paths = sorted(p for p in glob.glob(os.path.join(STORIES_DIR, "*.json"))
                    if not os.path.basename(p).startswith((".", "_")))
-    if not paths and os.path.exists(LEGACY_STORY):
-        paths = [LEGACY_STORY]
+    if os.path.exists(LEGACY_STORY):
+        paths = [LEGACY_STORY] + paths
     out = []
     for p in paths:
         try:
@@ -741,6 +741,20 @@ def show_library():
                 st.rerun()
 
 
+def _push_story_to_git(path):
+    """Best-effort: commit and push a newly saved story to the git remote."""
+    import subprocess
+    try:
+        subprocess.run(["git", "add", "-f", path], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", f"Add story: {os.path.basename(path)}"],
+            check=True, capture_output=True,
+        )
+        subprocess.run(["git", "push"], check=True, capture_output=True)
+    except Exception:
+        pass  # non-fatal — story is already saved to disk
+
+
 def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model):
     try:
         story, problems = generate_story_api(theme, difficulty, length, title_hint,
@@ -754,6 +768,7 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
     if story and not problems:
         path = unique_story_path(story.get("title") or theme)
         save_story_file(story, path)
+        _push_story_to_git(path)
         verdict, vlines = balance_check(path, difficulty)
         return {"ok": True, "path": path, "title": story.get("title") or theme,
                 "verdict": verdict, "vlines": vlines}

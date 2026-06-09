@@ -1,0 +1,294 @@
+{
+  "title": "Silent Run: The Hyperion Drift",
+  "theme": "Derelict generation ship",
+  "difficulty": "normal",
+  "goal": "Reach the heart of the dead colony ship Hyperion and get out alive — restart her reactor, rally the frozen survivors, or simply make the last escape pod.",
+  "character_template": {
+    "health": 18,
+    "strength": 10,
+    "agility": 10,
+    "stamina": 10
+  },
+  "items": {
+    "patch_kit": {
+      "name": "Trauma Patch Kit",
+      "icon": "🩹",
+      "description": "Sealed field medkit. Use it from your pack to stop the bleeding (+8 HP).",
+      "use": {
+        "heal": 8
+      }
+    },
+    "mag_boots": {
+      "name": "Mag-Boots",
+      "icon": "🥾",
+      "description": "Magnetic soles for the zero-g spine — +3 to Agility checks while drifting."
+    },
+    "keycard": {
+      "name": "Engineer's Keycard",
+      "icon": "💳",
+      "description": "Black ICE-etched keycard. Unlocks the reactor bulkhead."
+    }
+  },
+  "start_location_id": "docking_ring",
+  "locations": {
+    "docking_ring": {
+      "description": "Your cutter mates with the Hyperion's docking ring with a groan of tortured metal. Beyond the airlock: darkness, frost, and the slow red pulse of emergency strips. The ship has been drifting silent for ninety years. Two ways in — the cargo lock, or a maintenance ladder vanishing up into the cold.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Cycle the inner lock into the cargo bay",
+          "target_id": "cargo_bay"
+        },
+        {
+          "text": "Climb the maintenance ladder",
+          "target_id": "maintenance"
+        }
+      ]
+    },
+    "cargo_bay": {
+      "description": "A cathedral of frost-rimed containers, half of them torn open by some long-ago decompression. A trauma kit still hangs in a wall cradle by the door. Ahead, the central spine lift; to the side, a jammed security shutter.",
+      "is_end": false,
+      "loot": [
+        "patch_kit"
+      ],
+      "choices": [
+        {
+          "text": "Cross to the central spine lift",
+          "target_id": "zero_g_spine"
+        },
+        {
+          "text": "Force the jammed security shutter",
+          "target_id": "security",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 5
+          }
+        }
+      ]
+    },
+    "maintenance": {
+      "description": "A cramped utility crawlspace, every surface furred with ice crystals. A dead crewman's locker hangs open — inside, a pair of mag-boots, still charged. The crawlway forks toward the spine; a hatch drops back to the cargo bay.",
+      "is_end": false,
+      "loot": [
+        "mag_boots"
+      ],
+      "choices": [
+        {
+          "text": "Crawl through to the central spine",
+          "target_id": "zero_g_spine"
+        },
+        {
+          "text": "Drop back down into the cargo bay",
+          "target_id": "cargo_bay"
+        }
+      ]
+    },
+    "zero_g_spine": {
+      "description": "The spine runs the length of the ship — a kilometer of zero-g shaft, its grav-plating long dead. You float at the lip. Far down one branch, the bridge; closer, the medbay. Without a grip, a wrong push sends you spinning into the dark.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Haul hand-over-hand the long way to the bridge",
+          "target_id": "bridge",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 16,
+            "dice_type": "2d6",
+            "fail_damage": 6,
+            "item_bonus": {
+              "item": "mag_boots",
+              "bonus": 3
+            }
+          }
+        },
+        {
+          "text": "Clip a safety line and cross to the medbay",
+          "target_id": "medbay",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "item_bonus": {
+              "item": "mag_boots",
+              "bonus": 3
+            }
+          }
+        }
+      ]
+    },
+    "medbay": {
+      "description": "The medbay's cryo-banks line both walls, their occupants frozen mid-dream behind fogged glass — survivors, waiting ninety years for a hand on the thaw switch. A service lift hums faintly, still drawing trickle-power.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Take the service lift down to the security deck",
+          "target_id": "security"
+        },
+        {
+          "text": "Ride the lift up to the bridge",
+          "target_id": "bridge"
+        }
+      ]
+    },
+    "security": {
+      "description": "The security deck is a slaughter of dead consoles — and one thing still alive. A Sentry Drone uncoils from the ceiling on the dead captain's last standing order, target-laser blooming red across your chest. It is fast. You will have to be faster.",
+      "is_end": false,
+      "monster": {
+        "name": "Sentry Drone",
+        "strength": 15,
+        "fail_damage": 6,
+        "dice_type": "2d6",
+        "attribute": "agility"
+      },
+      "choices": [
+        {
+          "text": "Fall back to the cargo bay",
+          "target_id": "cargo_bay",
+          "is_flee": true
+        },
+        {
+          "text": "Slip past it during its reboot cycle",
+          "target_id": "armory",
+          "is_flee": true,
+          "condition": {
+            "attribute": "agility",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 5
+          }
+        },
+        {
+          "text": "Sweep the armory beyond",
+          "target_id": "armory"
+        }
+      ]
+    },
+    "armory": {
+      "description": "A small-arms locker, mostly stripped — but on the body of the chief engineer, frozen at his post, a keycard still hangs on its lanyard. Two lifts lead on: down toward the reactor, up toward the bridge.",
+      "is_end": false,
+      "loot": [
+        "keycard"
+      ],
+      "choices": [
+        {
+          "text": "Take the lift down to the reactor bulkhead",
+          "target_id": "reactor_door"
+        },
+        {
+          "text": "Head up to the bridge",
+          "target_id": "bridge"
+        }
+      ]
+    },
+    "reactor_door": {
+      "description": "The reactor bulkhead is a meter of blast-rated steel, sealed with a keycard reader still glowing a patient amber. Whatever the Hyperion's heart is doing in there, it is doing it quietly.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Swipe the engineer's keycard",
+          "target_id": "reactor_core",
+          "requires_item": "keycard"
+        },
+        {
+          "text": "Abandon the reactor and head to the bridge",
+          "target_id": "bridge"
+        }
+      ]
+    },
+    "reactor_core": {
+      "description": "The reactor chamber is a frozen cathedral of conduits around a dead star of a core. The restart sequence is mechanical, brutal: a hand-crank to prime it, or a delicate reroute through the auxiliary conduits. Either way, the cold is a living thing in here.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Prime the core with the main hand-crank",
+          "target_id": "reactor_restart",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 16,
+            "dice_type": "2d6",
+            "fail_damage": 6
+          }
+        },
+        {
+          "text": "Reroute power through the auxiliary conduits",
+          "target_id": "reactor_restart",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 5
+          }
+        },
+        {
+          "text": "Abort the restart and climb to the bridge",
+          "target_id": "bridge"
+        }
+      ]
+    },
+    "bridge": {
+      "description": "The bridge wraps you in dead glass and the enormous silence of stars. The helm still answers, just. From here you can broadcast, you can run for the pods — or you can take the chair, and ride the old ship wherever she is going.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Broadcast a mayday and rally the cryo survivors",
+          "target_id": "ally_evac"
+        },
+        {
+          "text": "Make for the escape pods",
+          "target_id": "escape_pod_bay"
+        },
+        {
+          "text": "Take the helm and ride her down",
+          "target_id": "went_down"
+        }
+      ]
+    },
+    "escape_pod_bay": {
+      "description": "Of forty escape pods, thirty-nine are gone or dead. One green light remains, across a bay open to vacuum on one side. The last pod waits — or you could chance the spacewalk to a second pod hung up in its clamps.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Strap into the last working pod and launch",
+          "target_id": "escape_pod"
+        },
+        {
+          "text": "Spacewalk across the open bay to the stuck pod",
+          "target_id": "escape_pod",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 16,
+            "dice_type": "2d6",
+            "fail_damage": 7
+          }
+        }
+      ]
+    },
+    "reactor_restart": {
+      "description": "The core catches. Light slams down the spine, grav-plating thuds back to life, and ninety years of cold begins, slowly, to lift. The Hyperion is alive again — and so are the thousand souls sleeping in her medbay. You did not just survive her. You woke her.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "ally_evac": {
+      "description": "Your mayday reaches a passing ore-hauler within the hour. Together you thaw the cryo-banks one by one and walk the dazed survivors to the airlocks. Ninety years late, the Hyperion's passengers finally make planetfall — and they will remember the stranger who came aboard a dead ship and refused to leave alone.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "escape_pod": {
+      "description": "The pod blows clear of the Hyperion on a gout of frozen gas. You watch the great dark hull shrink behind you, still silent, still drifting. You didn't save her. But the beacon is squawking, the air is warm, and you are going home.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "went_down": {
+      "description": "You settle into the captain's chair and let the helm have you. The Hyperion was always going to find her star; you only kept her company for the last of it. The viewport fills with light. It is, at the end, a quiet way to go.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    }
+  }
+}
