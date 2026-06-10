@@ -1,0 +1,672 @@
+{
+  "title": "Dust and Rust: The Salt Flat Run",
+  "theme": "Post-apocalyptic Wasteland",
+  "goal": "Survive the wasteland and find your own salvation \u2014 whether that means saving others with the lost vaccine, escaping to the Green Valley, uncovering a hidden bunker, or toppling the warlord who holds Iron City in a grip of fear.",
+  "character_template": {
+    "health": 16,
+    "strength": 10,
+    "agility": 10,
+    "stamina": 10
+  },
+  "items": {
+    "compass": {
+      "name": "Brass Compass",
+      "icon": "\ud83e\udded",
+      "description": "Lets you cross the Salt Flats on a sure bearing \u2014 no exhausting detours."
+    },
+    "canteen": {
+      "name": "Purified Canteen",
+      "icon": "\ud83e\uded9",
+      "description": "Clean water \u2014 eases the killing heat of the Flats (+3 to Stamina checks there)."
+    },
+    "flare_gun": {
+      "name": "Flare Gun",
+      "icon": "\ud83d\ude80",
+      "description": "Emergency signal. Three rounds remain."
+    },
+    "tunnel_map": {
+      "name": "Hospital Tunnel Map",
+      "icon": "\ud83d\uddfa\ufe0f",
+      "description": "Shows a hidden pre-war access tunnel into the hospital district."
+    },
+    "medkit": {
+      "name": "Field Medkit",
+      "icon": "\ud83e\ude79",
+      "description": "Pre-war sealed medical kit. Use it from your pack to restore 8 HP.",
+      "use": {
+        "heal": 8
+      }
+    }
+  },
+  "start_location_id": "the_outpost",
+  "locations": {
+    "the_outpost": {
+      "description": "You arrive at 'The Last Gasp' \u2014 a crumbling trading post assembled from shipping containers and corrugated iron. The air reeks of diesel and old fear. A heavyset merchant leans against a stack of crates, watching you with calculating eyes. To the north, a heat-shimmer marks the Salt Flats. East, a cracked road sign reads: IRON CITY \u2014 40 KM. Above a doorway, a faded neon sign flickers: BAR.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Help the merchant lift his crate \u2014 he's offering a reward",
+          "target_id": "merchant_stash",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 3
+          }
+        },
+        {
+          "text": "Duck into the bar to gather information",
+          "target_id": "outpost_saloon"
+        },
+        {
+          "text": "Head north into the Salt Flats",
+          "target_id": "salt_flats_edge"
+        },
+        {
+          "text": "Take the road east toward Iron City",
+          "target_id": "city_road"
+        }
+      ]
+    },
+    "merchant_stash": {
+      "description": "You hoist the crate onto the shelf with a grunt. The merchant whistles, then vanishes behind a canvas curtain. He returns with a battered brass compass and a heavy canteen. 'Compass'll keep you from dying on the Flats. That water's purified \u2014 worth its weight out there.' He lowers his voice: 'There's a back route into Iron City through the eastern sewers. Past the old fuel depot. Don't tell the gate guards I told you.'",
+      "is_end": false,
+      "loot": [
+        "compass",
+        "canteen"
+      ],
+      "choices": [
+        {
+          "text": "Head to the Salt Flats",
+          "target_id": "salt_flats_edge"
+        },
+        {
+          "text": "Take the road east toward Iron City",
+          "target_id": "city_road"
+        }
+      ]
+    },
+    "outpost_saloon": {
+      "description": "The bar is dim, smoky, and smells of fermented cactus juice. A one-eyed woman behind the counter slides you a drink without being asked. After twenty minutes of listening, you piece together three things: the Salt Flats conceal a nomad tribe near an old crash site; Iron City is under the thumb of a warlord called The Crank; and somewhere beneath the city's eastern hospital, a sealed pre-war vault holds the vaccine for Wasteland Fever. Most people who've gone looking for it haven't come back.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Head north into the Salt Flats",
+          "target_id": "salt_flats_edge"
+        },
+        {
+          "text": "Take the road east toward Iron City",
+          "target_id": "city_road"
+        }
+      ]
+    },
+    "salt_flats_edge": {
+      "description": "The Salt Flats stretch to the horizon like a shattered mirror \u2014 blinding white, brutally flat. The air tastes of mineral dust and old radiation. Without water or a bearing, this place will drain you dry. A faint trail of footprints leads north. The heat is already pulling at your reserves.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Navigate by compass \u2014 a sure bearing north-northwest",
+          "target_id": "nomad_territory",
+          "requires_item": "compass"
+        },
+        {
+          "text": "Follow the footprints north into the deep Flats",
+          "target_id": "salt_flats_deep",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "item_bonus": {
+              "item": "canteen",
+              "bonus": 3
+            }
+          }
+        },
+        {
+          "text": "Push around the long way on foot \u2014 slower, and the heat is merciless",
+          "target_id": "nomad_territory",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "item_bonus": {
+              "item": "canteen",
+              "bonus": 3
+            }
+          }
+        },
+        {
+          "text": "Turn back to the Outpost",
+          "target_id": "the_outpost"
+        }
+      ]
+    },
+    "salt_flats_deep": {
+      "description": "You push deep into the Flats. The sun punishes from above; the salt reflects it back from below \u2014 double punishment. Then the wind picks up. A yellowish wall of dust rises on the horizon and rushes toward you with terrifying speed. A sandstorm. You have seconds to react.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Sprint to a ridge of salt rocks and take cover",
+          "target_id": "nomad_territory",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 6,
+            "fail_target": "dust_blind"
+          }
+        },
+        {
+          "text": "Wrap your face and push straight through the storm",
+          "target_id": "nomad_territory",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 7,
+            "fail_target": "dust_blind",
+            "item_bonus": {
+              "item": "canteen",
+              "bonus": 3
+            }
+          }
+        }
+      ]
+    },
+    "dust_blind": {
+      "description": "The storm swallows you whole. Sand fills your lungs and scours your skin. You stagger blind for what feels like hours. When the wind finally drops, you're completely disoriented. But you're alive. In the distance, a smudge of dark fabric flaps on a pole.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Stagger toward the flag",
+          "target_id": "nomad_territory",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 12,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "item_bonus": {
+              "item": "canteen",
+              "bonus": 3
+            }
+          }
+        },
+        {
+          "text": "Rest and wait for a landmark to emerge from the haze",
+          "target_id": "nomad_territory"
+        }
+      ]
+    },
+    "nomad_territory": {
+      "description": "You reach the territory of the Salt Walkers \u2014 a nomad tribe three generations deep into the Flats. Their camp is a ring of sun-bleached tents marked with spiral symbols. Two scouts block your path, spears raised. Behind them, an elder woman watches from the shade of a canopy. She speaks first: 'Why does an outsider cross our land?'",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Offer your supplies as a gift and ask for passage",
+          "target_id": "nomad_camp"
+        },
+        {
+          "text": "Challenge their warrior to prove your worth",
+          "target_id": "nomad_camp",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 5,
+            "fail_target": "driven_out"
+          }
+        },
+        {
+          "text": "Try to slip past them into the desert beyond",
+          "target_id": "desert_oasis",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 3,
+            "fail_target": "nomad_camp"
+          }
+        }
+      ]
+    },
+    "driven_out": {
+      "description": "The warrior throws you to the ground and the tribe laughs. The elder points south. 'Go. Do not return.' You limp away, bruised, still breathing. The city road shimmers to the east.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Head to Iron City",
+          "target_id": "city_road"
+        },
+        {
+          "text": "Circle wide around the camp toward the oasis",
+          "target_id": "desert_oasis",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 12,
+            "dice_type": "2d6",
+            "fail_damage": 3
+          }
+        }
+      ]
+    },
+    "nomad_camp": {
+      "description": "Inside the camp you are welcomed with bitter tea and flatbread. The elder, Mara, tells you about a crashed cargo plane half a day north \u2014 its hold has preserved food, medical gear, and an emergency flare kit. She also warns you: 'The Crank runs Iron City on fear alone. Beneath the old hospital is a vault \u2014 the Walkers say it holds medicine for the Wasteland Fever. Many have tried. Few returned.' She offers you a guide to the plane.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Accept the guide and head to the crashed plane",
+          "target_id": "desert_oasis"
+        },
+        {
+          "text": "Thank them and set out directly for Iron City",
+          "target_id": "city_road"
+        }
+      ]
+    },
+    "desert_oasis": {
+      "description": "Your guide leads you to a sunken depression where a scraggly palm leans over a murky pool. Beside it, half-buried in salt, lies the wreck of a massive cargo plane, its fuselage surprisingly intact. The guide nods and disappears back into the Flats. Inside the plane, you can see the glow of a still-active emergency beacon.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Search the cargo hold",
+          "target_id": "plane_wreck"
+        },
+        {
+          "text": "Drink, rest, then continue to Iron City",
+          "target_id": "city_road"
+        }
+      ]
+    },
+    "plane_wreck": {
+      "description": "Inside the fuselage it is cool and strangely peaceful. Sealed crates line the shelving: ration packs, water containers, a field medkit \u2014 and on the cockpit instrument panel, a fully charged flare gun with three rounds. Wedged behind the pilot's seat, a laminated map shows a hidden pre-war access tunnel that bypasses Iron City's main gate entirely, running directly into the hospital district.",
+      "is_end": false,
+      "loot": [
+        "flare_gun",
+        "tunnel_map",
+        "medkit"
+      ],
+      "choices": [
+        {
+          "text": "Fire a distress flare into the sky",
+          "target_id": "rescue_ending",
+          "requires_item": "flare_gun"
+        },
+        {
+          "text": "Take what you need and head to Iron City",
+          "target_id": "city_road"
+        }
+      ]
+    },
+    "city_road": {
+      "description": "The road to Iron City is a cracked highway flanked by rusted vehicle husks. The city's silhouette grows on the horizon \u2014 jagged towers, smokestacks, and the glint of salvaged metal. As you get closer the road narrows. Ahead, the main gate is guarded. To the south a drainage grate is half-hidden by debris.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Use the tunnel map to enter unseen through the hospital access shaft",
+          "target_id": "city_tunnel",
+          "requires_item": "tunnel_map"
+        },
+        {
+          "text": "Approach the main gate",
+          "target_id": "city_outskirts"
+        },
+        {
+          "text": "Slip through the drainage grate into the sewers",
+          "target_id": "city_sewers",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "fail_target": "city_outskirts"
+          }
+        }
+      ]
+    },
+    "city_tunnel": {
+      "description": "The map leads you to a disguised hatch in a dry riverbed. The tunnel smells of stale air and old concrete \u2014 but it holds. Twenty minutes of crawling in the dark, then a maintenance hatch opens into a storage room behind the hospital. No guards. No gate. You're inside.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Head straight for the hospital basement",
+          "target_id": "hospital_basement"
+        },
+        {
+          "text": "Scout the hospital ward first",
+          "target_id": "hospital_ward"
+        }
+      ]
+    },
+    "city_outskirts": {
+      "description": "The gate is guarded by a pack of Scav-Hounds \u2014 feral mutants bred for aggression, iron-collared and vicious. Their handler sets them loose the moment he spots you. Three of them circle you, growling, waiting for the lunge.",
+      "is_end": false,
+      "monster": {
+        "name": "Scav-Hound Pack",
+        "strength": 14,
+        "fail_damage": 6,
+        "dice_type": "2d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Dive into the drainage ditch and escape through the sewers",
+          "target_id": "city_sewers",
+          "is_flee": true,
+          "condition": {
+            "attribute": "agility",
+            "check_value": 12,
+            "dice_type": "2d6",
+            "fail_damage": 3
+          }
+        },
+        {
+          "text": "After defeating the hounds, enter the city",
+          "target_id": "city_gate"
+        }
+      ]
+    },
+    "city_sewers": {
+      "description": "The sewer is a maze of corroded concrete tunnels. Bioluminescent slime on the walls gives just enough light. After twenty minutes of wrong turns, you find something unexpected: a heavy steel door with an old-world security panel, its LEDs still blinking green. Someone sealed something down here.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Try to hack the security panel",
+          "target_id": "hidden_bunker",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 2
+          }
+        },
+        {
+          "text": "Force the door open",
+          "target_id": "hidden_bunker",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 3
+          }
+        },
+        {
+          "text": "Leave the door and follow the main tunnel into the city",
+          "target_id": "city_gate"
+        }
+      ]
+    },
+    "hidden_bunker": {
+      "description": "The door opens onto a staircase descending into a fully intact pre-war bunker. Rows of hydroponic lights hum over growing plants. Climate control murmurs in the walls. There is food, clean water, medicine, and a library of old-world books. A terminal shows it can support a small community indefinitely. Against all odds \u2014 paradise.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Seal the bunker and make it your home",
+          "target_id": "bunker_ending"
+        },
+        {
+          "text": "Note the location carefully and continue into the city \u2014 others need to know",
+          "target_id": "city_gate"
+        }
+      ]
+    },
+    "city_gate": {
+      "description": "Inside the walls, Iron City is chaotic and alive \u2014 market stalls, forge-fires, desperate people. Guards in mismatched armor eye you but don't stop you; new faces are common. To the north you can see a skeletal radio tower. East, a red cross is painted on a half-collapsed building. West, the market square buzzes with trade and noise.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Head to the market district",
+          "target_id": "market_district"
+        },
+        {
+          "text": "Go directly to the hospital",
+          "target_id": "hospital_entrance"
+        },
+        {
+          "text": "Climb the radio tower for a view of the whole area",
+          "target_id": "radio_tower_base"
+        }
+      ]
+    },
+    "market_district": {
+      "description": "The market is loud and crowded with salvage. You trade a few scraps for information. A nervous fence leans close: 'The Crank's compound is north end of the city \u2014 whoever takes him out runs this place. And there's a sealed medical vault in the hospital basement, pre-war, loaded with Wasteland Fever vaccines. Both paths lead somewhere worth going. Neither one is safe.'",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Head to the hospital to find the vaccine vault",
+          "target_id": "hospital_entrance"
+        },
+        {
+          "text": "Go after The Crank at his compound",
+          "target_id": "warlord_compound"
+        },
+        {
+          "text": "Climb the radio tower first",
+          "target_id": "radio_tower_base"
+        }
+      ]
+    },
+    "radio_tower_base": {
+      "description": "The radio tower is a three-hundred-foot steel lattice swaying gently in the wind. The bottom third has been reinforced over the years, but above that it's original corroded metalwork. A hand-painted sign reads: CLIMB AT OWN RISK. From the top you could see a hundred kilometers in every direction \u2014 but it'll take everything you have to get there.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Climb the tower",
+          "target_id": "radio_tower_summit",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 6,
+            "fail_target": "city_gate"
+          }
+        },
+        {
+          "text": "Decide it's not worth the risk and head back",
+          "target_id": "city_gate"
+        }
+      ]
+    },
+    "radio_tower_summit": {
+      "description": "The view is staggering. Iron City spreads below you. Beyond the walls: white Flats, brown desert \u2014 and far to the northwest, a ribbon of impossible green. A valley, untouched. On the instrument panel sits a mirror, set up by some previous climber. And below, you can see exactly where the hospital and the compound are.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Fire your flare gun \u2014 an unmistakable signal for any airship in range",
+          "target_id": "rescue_ending",
+          "requires_item": "flare_gun"
+        },
+        {
+          "text": "Flash the mirror toward the sky and hope someone sees it",
+          "target_id": "rescue_ending"
+        },
+        {
+          "text": "Record the valley's bearing and set out for it",
+          "target_id": "valley_path"
+        },
+        {
+          "text": "Descend and head for the hospital vault",
+          "target_id": "hospital_entrance"
+        },
+        {
+          "text": "Descend and go after The Crank",
+          "target_id": "warlord_compound"
+        }
+      ]
+    },
+    "hospital_entrance": {
+      "description": "The hospital is a five-story concrete ruin, half its facade torn away by some old explosion. The ground floor serves as a makeshift clinic, staffed by exhausted medics. At the back, stairs lead down to the basement. A mutant in a white coat \u2014 huge, stitched together from mismatched parts \u2014 guards the basement door. He's very territorial.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Slip past the guard while his back is turned",
+          "target_id": "hospital_ward",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 5,
+            "fail_target": "hospital_entrance"
+          }
+        },
+        {
+          "text": "Fight past the mutant guard",
+          "target_id": "hospital_ward",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 6,
+            "fail_target": "hospital_entrance"
+          }
+        },
+        {
+          "text": "Back away and slip out to the city instead",
+          "target_id": "city_gate"
+        }
+      ]
+    },
+    "hospital_ward": {
+      "description": "Beyond the guard is the old ward \u2014 rows of rusted beds, shattered IV stands, the smell of antiseptic long since replaced by mildew. At the far end, a heavy door: BASEMENT \u2014 AUTHORIZED ONLY. Not locked. Just heavy. Stairs descend into darkness below. You hear dripping water. (Tip: if you carry a medkit, you can Use it from your pack at any time.)",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Descend to the basement",
+          "target_id": "hospital_basement"
+        }
+      ]
+    },
+    "hospital_basement": {
+      "description": "The basement is a labyrinth of storage rooms and old-world infrastructure. Pipes run along every ceiling. In the far corner, behind a collapsed shelf you shove aside, is the vault door: three inches of hardened steel, wheel-locked, sealed for decades. The wheel is seized with rust, but the mechanism is intact. You grip the cold metal.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Force the wheel with everything you have",
+          "target_id": "hospital_vault",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 16,
+            "dice_type": "2d6",
+            "fail_damage": 5
+          }
+        },
+        {
+          "text": "Search the basement for a tool or lever to help",
+          "target_id": "hospital_vault",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 4
+          }
+        },
+        {
+          "text": "Give up on the vault and climb back to the city",
+          "target_id": "city_gate"
+        }
+      ]
+    },
+    "hospital_vault": {
+      "description": "The door swings open. Inside: temperature-controlled shelves of sealed vaccine vials, untouched since before the war. Enough to inoculate an entire city. Enough to start reversing the Wasteland Fever. There are also surgical tools, antibiotics, and a handwritten ledger. The final entry reads: 'To whoever finds this \u2014 please. Help them.'",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Take the vaccines and bring them to the city's survivors",
+          "target_id": "vaccine_savior"
+        }
+      ]
+    },
+    "warlord_compound": {
+      "description": "The Crank's compound is a fortified factory at the city's north end. You deal with the outer guards quickly. Inside, The Crank waits in his throne room: a man built like a tank, his right arm replaced by a hydraulic piston. He sees you and grins. 'Another hero. Good. I've been bored.'",
+      "is_end": false,
+      "monster": {
+        "name": "The Crank",
+        "strength": 16,
+        "fail_damage": 7,
+        "dice_type": "2d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Flee the compound \u2014 head for the hospital instead",
+          "target_id": "hospital_entrance",
+          "is_flee": true
+        },
+        {
+          "text": "Sabotage his hydraulic arm while he's monologuing",
+          "target_id": "compound_armory",
+          "is_flee": true,
+          "condition": {
+            "attribute": "agility",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 7
+          }
+        },
+        {
+          "text": "After defeating The Crank, search the compound",
+          "target_id": "compound_armory"
+        }
+      ]
+    },
+    "compound_armory": {
+      "description": "The Crank is down \u2014 by your fist or by his own collapsing machinery \u2014 and his guards scatter. The armory holds weapons, fuel cells, a functional vehicle, and a communication rig that still broadcasts. Iron City has gone quiet \u2014 everyone is waiting to see who comes out. You step out onto the roof. The crowd below looks up.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Declare the city free \u2014 no more warlord rule",
+          "target_id": "wasteland_king"
+        },
+        {
+          "text": "Take the vehicle and drive to the Green Valley",
+          "target_id": "valley_path"
+        },
+        {
+          "text": "Use the comm rig to broadcast the bunker's location to all survivors",
+          "target_id": "bunker_ending"
+        }
+      ]
+    },
+    "valley_path": {
+      "description": "You leave Iron City behind using the bearing from the radio tower. The Flats give way to scrubland, then to something impossible: real grass, green and unirradiated, watered by an underground spring that survived the wars. Three weeks of hard travel later, you crest a ridge.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Descend into the Green Valley",
+          "target_id": "valley_ending"
+        }
+      ]
+    },
+    "rescue_ending": {
+      "description": "The signal burns bright against the pale sky \u2014 visible for fifty kilometers. Within two hours, the distant drone of an engine resolves into an airship: old-world design, kept running by three generations of engineers. They haul you aboard. From the gondola, you watch the wasteland shrink below you as the ship turns toward the floating settlements above the clouds. You made it out.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "bunker_ending": {
+      "description": "The bunker is home. Over the following weeks you bring others \u2014 survivors from the outpost, Salt Walkers, people from Iron City. The hydroponic gardens grow enough for thirty. Clean water flows. The library fills with readers. It is not the world before the war. But it is something better than what came after.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "vaccine_savior": {
+      "description": "You carry the vaccines through the city yourself, standing in the square while the medics work. Within days the Wasteland Fever begins to recede. Within months, people who had accepted death start talking about the future. Your name spreads beyond Iron City, carried by traders and travelers. In a wasteland where everyone was just surviving, you gave people a reason to live.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "valley_ending": {
+      "description": "The Green Valley is everything the old woman on the airship radio described \u2014 sheltered, watered, soil that has never been poisoned. A small community is already here, fifty people who found it by different roads. They welcome you without ceremony. There is work to do, fields to tend, walls to build. But the sky is clear, the water is clean, and for the first time since you can remember, the future feels like a place worth going.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "wasteland_king": {
+      "description": "You don't call yourself king \u2014 the word feels wrong. But you speak from the roof of the compound, and the city listens. You tell them the warlord is gone. You tell them about the bunker, the vaccine, the Green Valley to the northwest. You tell them there are choices now, real ones. Some people cry. Some cheer. Some just stand there, learning what hope feels like after years without it. Whatever the wasteland becomes next, it starts here.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    }
+  }
+}

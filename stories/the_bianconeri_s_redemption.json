@@ -1,0 +1,607 @@
+{
+  "title": "The Bianconeri's Redemption",
+  "theme": "Edik and Del Piero make Juve great again",
+  "difficulty": "hard",
+  "goal": "Restore Juventus to its former glory by winning the Champions League.",
+  "prologue": "The roar of the crowd is a distant memory, replaced by the murmurs of doubt. Juventus, once the symbol of Italian footballing dominance, now languishes in the shadow of its past glories. A scandal has tarnished its name, and the team's spirit is broken. But whispers of a new dawn echo through the hallowed halls of Continassa. Two legendary figures, Alessandro Del Piero and a rising star named Edik, have returned, tasked with a monumental challenge: to rebuild the Bianconeri from the ashes and reclaim their rightful place at the pinnacle of European football. The stakes are immense — not just for the club, but for the pride of Turin itself.",
+  "character_template": {
+    "health": 16,
+    "strength": 10,
+    "agility": 10,
+    "stamina": 10
+  },
+  "items": {
+    "vintage_jersey": {
+      "name": "Vintage Juve Jersey",
+      "icon": "👕",
+      "description": "A worn but cherished jersey from a glorious era. Inspires supreme confidence."
+    },
+    "tactics_board": {
+      "name": "Tactics Board",
+      "icon": "📋",
+      "description": "Del Piero's legendary tactics board. Grants critical insight into opponent weaknesses."
+    },
+    "diamond_studs": {
+      "name": "Diamond Studded Boots",
+      "icon": "👟",
+      "description": "Boots blessed by Del Piero himself. Enhances agility on the pitch."
+    },
+    "medical_kit": {
+      "name": "Emergency Medical Kit",
+      "icon": "🩹",
+      "description": "A compact kit for immediate medical attention. Use to recover 8 health.",
+      "use": {
+        "heal": 8
+      }
+    }
+  },
+  "start_location_id": "training_ground",
+  "locations": {
+    "training_ground": {
+      "description": "The iconic Juventus training ground. The air crackles with anticipation, but also with the weight of expectation. Edik and Del Piero stand before you, the new leadership. The path ahead is arduous, filled with demanding training, skeptical media, and fierce rivals.",
+      "loot": [
+        "vintage_jersey"
+      ],
+      "choices": [
+        {
+          "text": "Begin rigorous training with Edik.",
+          "target_id": "intense_training"
+        },
+        {
+          "text": "Consult Del Piero for tactical blueprints.",
+          "target_id": "tactical_briefing"
+        },
+        {
+          "text": "Address the skeptical press at the media center.",
+          "target_id": "press_conference",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 12,
+            "dice_type": "2d6",
+            "fail_damage": 3,
+            "fail_target": "media_doubt"
+          }
+        }
+      ]
+    },
+    "intense_training": {
+      "description": "Days blur into weeks under Edik's demanding regime. Every muscle aches, but your skills sharpen. You feel your strength and stamina growing, but the risk of burnout is ever-present.",
+      "choices": [
+        {
+          "text": "Push through the pain, aiming for peak conditioning.",
+          "target_id": "peak_conditioning",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 14,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "fail_target": "burnout"
+          }
+        },
+        {
+          "text": "Focus on technique, guided by Edik's precise drills.",
+          "target_id": "technical_mastery",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 3,
+            "fail_target": "frustration"
+          }
+        },
+        {
+          "text": "Proceed to the locker room to prepare for the season.",
+          "target_id": "locker_room"
+        }
+      ]
+    },
+    "tactical_briefing": {
+      "description": "Del Piero unfolds his legendary tactics board. He speaks of exploiting weaknesses, controlling tempo, and striking with precision. You gain a deeper understanding of the game's mental aspect.",
+      "loot": [
+        "tactics_board"
+      ],
+      "choices": [
+        {
+          "text": "Study the opponent's defensive weaknesses.",
+          "target_id": "strategic_advantage",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "fail_target": "confusion"
+          }
+        },
+        {
+          "text": "Listen to Del Piero's legendary champions league stories.",
+          "target_id": "del_piero_anecdotes",
+          "heals": 4
+        },
+        {
+          "text": "Proceed to the locker room.",
+          "target_id": "locker_room"
+        }
+      ]
+    },
+    "press_conference": {
+      "description": "The press room is a minefield of probing questions and cynical journalists. You must navigate their hostility and project an image of renewed strength and determination.",
+      "choices": [
+        {
+          "text": "Deliver a confident, inspiring statement.",
+          "target_id": "statement_impact",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 13,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "fail_target": "media_scandal"
+          }
+        },
+        {
+          "text": "Deflect and focus on team unity.",
+          "target_id": "team_focus",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 12,
+            "dice_type": "2d6",
+            "fail_damage": 3,
+            "fail_target": "media_doubt"
+          }
+        },
+        {
+          "text": "Head straight to the locker room.",
+          "target_id": "locker_room"
+        }
+      ]
+    },
+    "peak_conditioning": {
+      "description": "You have pushed your physical limits. Your stamina is at an all-time high, and your movements feel fluid.",
+      "loot": [
+        "diamond_studs"
+      ],
+      "choices": [
+        {
+          "text": "Go to the locker room, ready to run all day.",
+          "target_id": "locker_room"
+        }
+      ]
+    },
+    "technical_mastery": {
+      "description": "Your technique is now flawless. Your dribbling is sublime, your passes incisive. You move with grace and precision.",
+      "loot": [
+        "diamond_studs"
+      ],
+      "choices": [
+        {
+          "text": "Go to the locker room, ready to weave through defenses.",
+          "target_id": "locker_room"
+        }
+      ]
+    },
+    "strategic_advantage": {
+      "description": "With Del Piero's tactics and your own insights, you possess a significant strategic advantage.",
+      "choices": [
+        {
+          "text": "Go to the locker room, ready to command the pitch.",
+          "target_id": "locker_room"
+        }
+      ]
+    },
+    "del_piero_anecdotes": {
+      "description": "Del Piero shares stories of triumph and resilience, his words a balm to your weary spirit. You feel a renewed sense of purpose.",
+      "choices": [
+        {
+          "text": "Go to the locker room, inspired.",
+          "target_id": "locker_room"
+        }
+      ]
+    },
+    "statement_impact": {
+      "description": "Your powerful statement resonates with the fans and the media, quelling doubts and igniting hope.",
+      "choices": [
+        {
+          "text": "Go to the locker room.",
+          "target_id": "locker_room"
+        }
+      ]
+    },
+    "team_focus": {
+      "description": "Your focus on the team's hard work and potential calms the skeptical journalists, earning a degree of respect.",
+      "choices": [
+        {
+          "text": "Go to the locker room.",
+          "target_id": "locker_room"
+        }
+      ]
+    },
+    "locker_room": {
+      "description": "The locker room buzzes with energy. Teammates share words of encouragement, the scent of liniment filling the air. You are ready.",
+      "choices": [
+        {
+          "text": "March out to the first league match!",
+          "target_id": "first_league_match"
+        }
+      ]
+    },
+    "first_league_match": {
+      "description": "The first league match is a gritty affair. You face a determined opponent, testing your resolve from the outset.",
+      "monster": {
+        "name": "Gritty Serie A Defender",
+        "strength": 14,
+        "fail_damage": 4,
+        "dice_type": "2d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Press the attack and claim victory.",
+          "target_id": "next_league_match"
+        },
+        {
+          "text": "Use your tactics board to orchestrate a stealthy counter-attack.",
+          "target_id": "next_league_match",
+          "is_flee": true,
+          "condition": {
+            "attribute": "agility",
+            "check_value": 15,
+            "dice_type": "2d6",
+            "fail_damage": 3,
+            "fail_target": "league_draw",
+            "item_bonus": {
+              "item": "tactics_board",
+              "bonus": 3
+            }
+          }
+        }
+      ]
+    },
+    "league_draw": {
+      "description": "A tough 0-0 draw. Disappointing, but you earned a point. You must recover quickly.",
+      "choices": [
+        {
+          "text": "Rest and prepare for the next league match.",
+          "target_id": "next_league_match",
+          "heals": 4
+        }
+      ]
+    },
+    "next_league_match": {
+      "description": "The second match. The chemistry between Edik and the squad is starting to show, but the opponent's counter-attack is lethal.",
+      "monster": {
+        "name": "Dynamic Counter-Attacking Squad",
+        "strength": 15,
+        "fail_damage": 5,
+        "dice_type": "2d6",
+        "attribute": "agility"
+      },
+      "choices": [
+        {
+          "text": "Push through to secure the win.",
+          "target_id": "champions_league_qualifier"
+        },
+        {
+          "text": "Inspire the team with your vintage jersey to hold the line.",
+          "target_id": "champions_league_qualifier",
+          "is_flee": true,
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 16,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "fail_target": "league_loss",
+            "item_bonus": {
+              "item": "vintage_jersey",
+              "bonus": 3
+            }
+          }
+        }
+      ]
+    },
+    "champions_league_qualifier": {
+      "description": "The crucial Champions League playoff qualifier. If you lose, the European dream dies here.",
+      "monster": {
+        "name": "Resilient European Challenger",
+        "strength": 15,
+        "fail_damage": 5,
+        "dice_type": "2d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Secure qualification for the group stages.",
+          "target_id": "champions_league_group_stage"
+        },
+        {
+          "text": "Utilize your diamond studs for a brilliant solo run.",
+          "target_id": "champions_league_group_stage",
+          "is_flee": true,
+          "condition": {
+            "attribute": "agility",
+            "check_value": 16,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "fail_target": "qualifier_loss",
+            "item_bonus": {
+              "item": "diamond_studs",
+              "bonus": 4
+            }
+          }
+        }
+      ]
+    },
+    "champions_league_group_stage": {
+      "description": "You've made it to the prestigious group stages! Juventus is back in Europe. The atmosphere is electric.",
+      "loot": [
+        "medical_kit"
+      ],
+      "choices": [
+        {
+          "text": "Rest in the recovery lounge before the first European night.",
+          "target_id": "recovery_lounge",
+          "heals": 6
+        },
+        {
+          "text": "Go straight to the group stage match.",
+          "target_id": "group_stage_match_1"
+        }
+      ]
+    },
+    "recovery_lounge": {
+      "description": "The medical staff treats your minor knocks. You feel rejuvenated.",
+      "choices": [
+        {
+          "text": "Head to the pitch for the first group match.",
+          "target_id": "group_stage_match_1"
+        }
+      ]
+    },
+    "group_stage_match_1": {
+      "description": "Under the bright floodlights, you face a formidable Spanish side.",
+      "monster": {
+        "name": "Spanish Possession Giants",
+        "strength": 16,
+        "fail_damage": 5,
+        "dice_type": "2d6",
+        "attribute": "agility"
+      },
+      "choices": [
+        {
+          "text": "Claim the win and advance.",
+          "target_id": "group_stage_match_2"
+        },
+        {
+          "text": "Rely on Del Piero's master blueprints to hold a draw.",
+          "target_id": "group_stage_match_2",
+          "is_flee": true,
+          "condition": {
+            "attribute": "strength",
+            "check_value": 17,
+            "dice_type": "2d6",
+            "fail_damage": 4,
+            "fail_target": "group_stage_draw",
+            "item_bonus": {
+              "item": "tactics_board",
+              "bonus": 4
+            }
+          }
+        }
+      ]
+    },
+    "group_stage_draw": {
+      "description": "A hard-fought 1-1 draw. It keeps you alive in the group, but the pressure builds.",
+      "choices": [
+        {
+          "text": "Prepare for the decisive second group match.",
+          "target_id": "group_stage_match_2",
+          "heals": 3
+        }
+      ]
+    },
+    "group_stage_match_2": {
+      "description": "The final, must-win group match against a physical German club.",
+      "monster": {
+        "name": "German Heavy Metal Side",
+        "strength": 16,
+        "fail_damage": 6,
+        "dice_type": "2d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Celebrate advancing to the knockout stages!",
+          "target_id": "knockout_stages"
+        },
+        {
+          "text": "Use your sheer endurance to secure the win.",
+          "target_id": "knockout_stages",
+          "is_flee": true,
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 17,
+            "dice_type": "2d6",
+            "fail_damage": 5,
+            "fail_target": "group_stage_loss",
+            "item_bonus": {
+              "item": "vintage_jersey",
+              "bonus": 4
+            }
+          }
+        }
+      ]
+    },
+    "knockout_stages": {
+      "description": "Sensational! Juventus advances to the knockout phase. The fans are beginning to believe again.",
+      "choices": [
+        {
+          "text": "Enter the intense preparations for the semi-final run.",
+          "target_id": "semi_finals"
+        }
+      ]
+    },
+    "semi_finals": {
+      "description": "The semi-finals of the Champions League. Only one opponent stands between Juve and the final.",
+      "choices": [
+        {
+          "text": "Step onto the pitch for the semi-final battle.",
+          "target_id": "semi_final_match"
+        }
+      ]
+    },
+    "semi_final_match": {
+      "description": "An intense battle against an elite English club. Every tackle is bone-shattering.",
+      "monster": {
+        "name": "Elite English Champions",
+        "strength": 17,
+        "fail_damage": 6,
+        "dice_type": "2d6",
+        "attribute": "stamina"
+      },
+      "choices": [
+        {
+          "text": "Claim your ticket to the grand final.",
+          "target_id": "champions_league_final"
+        },
+        {
+          "text": "Flash your diamond studs to dance through their defense.",
+          "target_id": "champions_league_final",
+          "is_flee": true,
+          "condition": {
+            "attribute": "agility",
+            "check_value": 18,
+            "dice_type": "2d6",
+            "fail_damage": 5,
+            "fail_target": "eliminated_in_semi_finals",
+            "item_bonus": {
+              "item": "diamond_studs",
+              "bonus": 5
+            }
+          }
+        }
+      ]
+    },
+    "champions_league_final": {
+      "description": "The Grand Finale. The world watches as Edik and Del Piero stand on the touchline, urging you forward.",
+      "monster": {
+        "name": "The Ultimate European Superclub",
+        "strength": 18,
+        "fail_damage": 7,
+        "dice_type": "2d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Execute a masterclass tactical performance.",
+          "target_id": "win",
+          "condition": {
+            "attribute": "strength",
+            "check_value": 18,
+            "dice_type": "2d6",
+            "fail_damage": 7,
+            "fail_target": "final_loss",
+            "item_bonus": {
+              "item": "tactics_board",
+              "bonus": 5
+            }
+          }
+        },
+        {
+          "text": "Try to win it with raw agility and individual brilliance.",
+          "target_id": "win",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 18,
+            "dice_type": "2d6",
+            "fail_damage": 7,
+            "fail_target": "final_loss",
+            "item_bonus": {
+              "item": "diamond_studs",
+              "bonus": 5
+            }
+          }
+        },
+        {
+          "text": "Play with ultimate team chemistry.",
+          "target_id": "win",
+          "is_flee": true,
+          "condition": {
+            "attribute": "strength",
+            "check_value": 19,
+            "dice_type": "2d6",
+            "fail_damage": 6,
+            "fail_target": "final_loss",
+            "item_bonus": {
+              "item": "vintage_jersey",
+              "bonus": 5
+            }
+          }
+        }
+      ]
+    },
+    "win": {
+      "description": "Champions! You have done it! Juventus is back on top of Europe. The roar of the crowd is deafening as you lift the trophy. Edik and Del Piero's return has brought glory back to Turin.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "final_loss": {
+      "description": "Heartbreak in the final. So close, yet so far. The dream of glory ends here for this season.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "eliminated_in_semi_finals": {
+      "description": "You have been eliminated in the Semi-Finals. A valiant effort, but the final remains out of reach.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "group_stage_loss": {
+      "description": "Your Champions League journey ends prematurely in the group stage. The dream of European glory has faded.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "qualifier_loss": {
+      "description": "You failed to win the qualifying match. The Champions League dream dies before it can even begin.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "league_loss": {
+      "description": "A crushing defeat. The media is in uproar, and the fans are disillusioned. The path to redemption has crumbled.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "burnout": {
+      "description": "You pushed too hard in training and have suffered burnout. Your season is over before it truly began.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "frustration": {
+      "description": "Your relentless pursuit of technical perfection has led to frustration and mental fatigue. Your progress has stalled.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "confusion": {
+      "description": "The tactical complexities have overwhelmed you. You are lost on the field, unable to make effective decisions.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "media_scandal": {
+      "description": "Your poor handling of the press has led to a media scandal, damaging the club's reputation and your own.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "media_doubt": {
+      "description": "Your lack of conviction with the media has sown doubt among the fans, affecting team morale beyond repair.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    }
+  }
+}
