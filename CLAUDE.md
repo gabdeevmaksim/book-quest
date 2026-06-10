@@ -137,6 +137,14 @@ an existing story without generating.
 
 Paths: `QUEST_STORIES_DIR` (`stories`), `QUEST_STORY` (`story.json`, legacy fallback).
 
+**S3-compatible story storage** (optional; AWS S3 / Cloudflare R2 / Backblaze B2 / MinIO):
+set `QUEST_S3_BUCKET` to enable. The bucket is the durable cross-machine store; `stories/`
+acts as a local cache — new stories are uploaded on save (status shown in the UI/CLI), and the
+app pulls missing/newer stories at startup (`sync_stories_from_s3`). Config: `QUEST_S3_ENDPOINT`
+(for R2/B2/MinIO), `QUEST_S3_REGION`, `QUEST_S3_PREFIX` (default `stories/`); credentials via
+standard `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`. One-time migration / manual sync:
+`python3 story_agent.py --s3-sync` (pulls newer, uploads local-only). Needs `boto3`.
+
 **Git auto-push of new stories** (`story_engine.push_story_to_git`, used by the Create page and
 `story_agent.py --push`): commits `Add story: <file>` and pushes. It returns `(ok, detail)` and
 the UI/CLI display the result — failures are never silent. Headless/Docker: HTTPS push auth via

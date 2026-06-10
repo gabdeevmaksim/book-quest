@@ -186,6 +186,110 @@ def push_story_to_git(path):
     return True, "committed and pushed to the remote"
 
 
+# ── optional S3-compatible story storage (AWS S3 / Cloudflare R2 / Backblaze B2 / MinIO) ──
+# Enable by setting QUEST_S3_BUCKET. The bucket is the durable, cross-machine store; the
+# local stories/ folder acts as a cache: new stories are uploaded on save, and the app
+# pulls missing/newer stories down at startup. Credentials use the standard AWS env vars
+# (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY) or any boto3 credential source.
+#   QUEST_S3_BUCKET    bucket name (setting this turns the feature on)
+#   QUEST_S3_ENDPOINT  custom endpoint for R2/B2/MinIO, e.g. https://<acct>.r2.cloudflarestorage.com
+#   QUEST_S3_REGION    region (optional; e.g. "auto" for R2)
+#   QUEST_S3_PREFIX    key prefix inside the bucket (default "stories/")
+
+def s3_enabled():
+    return bool(os.environ.get("QUEST_S3_BUCKET"))
+
+
+@lru_cache(maxsize=1)
+def _s3_client():
+    import boto3   # lazy: only needed when QUEST_S3_BUCKET is set
+    kw = {}
+    if os.environ.get("QUEST_S3_ENDPOINT"):
+        kw["endpoint_url"] = os.environ["QUEST_S3_ENDPOINT"]
+    if os.environ.get("QUEST_S3_REGION"):
+        kw["region_name"] = os.environ["QUEST_S3_REGION"]
+    return boto3.client("s3", **kw)
+
+
+def _s3_conf():
+    return (os.environ.get("QUEST_S3_BUCKET", ""),
+            os.environ.get("QUEST_S3_PREFIX", "stories/").strip("/") + "/")
+
+
+def push_story_to_s3(path, client=None):
+    """Upload one story file to the bucket. Returns (ok, detail); never raises."""
+    if not s3_enabled():
+        return False, "S3 storage not configured (set QUEST_S3_BUCKET)"
+    bucket, prefix = _s3_conf()
+    key = prefix + os.path.basename(path)
+    try:
+        client = client or _s3_client()
+        client.upload_file(path, bucket, key, ExtraArgs={"ContentType": "application/json"})
+        return True, f"uploaded to s3://{bucket}/{key}"
+    except ImportError:
+        return False, "boto3 isn't installed — pip install boto3"
+    except Exception as e:
+        return False, f"S3 upload failed: {str(e)[:300]}"
+
+
+def sync_stories_from_s3(client=None):
+    """Download stories that exist in the bucket but are missing (or newer) locally.
+    Returns (n_downloaded, errors); never raises. The bucket wins on conflicts."""
+    if not s3_enabled():
+        return 0, []
+    bucket, prefix = _s3_conf()
+    n, errors = 0, []
+    try:
+        client = client or _s3_client()
+        os.makedirs(STORIES_DIR, exist_ok=True)
+        paginator = client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                name = os.path.basename(obj["Key"])
+                if not name.endswith(".json"):
+                    continue
+                local = os.path.join(STORIES_DIR, name)
+                if (not os.path.exists(local)
+                        or obj["LastModified"].timestamp() > os.path.getmtime(local) + 1):
+                    try:
+                        client.download_file(bucket, obj["Key"], local)
+                        n += 1
+                    except Exception as e:
+                        errors.append(f"{name}: {str(e)[:200]}")
+    except ImportError:
+        errors.append("boto3 isn't installed — pip install boto3")
+    except Exception as e:
+        errors.append(f"S3 sync failed: {str(e)[:300]}")
+    return n, errors
+
+
+def seed_s3_from_local(client=None):
+    """One-time migration helper: upload every local story the bucket doesn't have yet.
+    Returns (n_uploaded, errors); never raises."""
+    if not s3_enabled():
+        return 0, ["S3 storage not configured (set QUEST_S3_BUCKET)"]
+    bucket, prefix = _s3_conf()
+    n, errors = 0, []
+    try:
+        client = client or _s3_client()
+        have = set()
+        paginator = client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            have |= {os.path.basename(o["Key"]) for o in page.get("Contents", [])}
+        for p in glob.glob(os.path.join(STORIES_DIR, "*.json")):
+            if os.path.basename(p) not in have:
+                ok, detail = push_story_to_s3(p, client=client)
+                if ok:
+                    n += 1
+                else:
+                    errors.append(detail)
+    except ImportError:
+        errors.append("boto3 isn't installed — pip install boto3")
+    except Exception as e:
+        errors.append(f"S3 seed failed: {str(e)[:300]}")
+    return n, errors
+
+
 # ── gates: correctness + balance ───────────────────────────────────────────────
 @lru_cache(maxsize=1)
 def _load_validator():

@@ -74,7 +74,21 @@ def main():
                     help="if it can't pass all gates / a model limit is hit, save the best draft anyway (marked DRAFT)")
     ap.add_argument("--audit", default=None, metavar="STORY.json",
                     help="don't generate — just run the gates on an existing story and report")
+    ap.add_argument("--s3-sync", action="store_true",
+                    help="don't generate — two-way sync with the S3 bucket (QUEST_S3_BUCKET): "
+                         "pull missing/newer stories down, upload local stories the bucket lacks")
     args = ap.parse_args()
+
+    if args.s3_sync:
+        if not E.s3_enabled():
+            print("S3 storage is not configured — set QUEST_S3_BUCKET (and AWS credentials).")
+            sys.exit(1)
+        down, derr = E.sync_stories_from_s3()
+        up, uerr = E.seed_s3_from_local()
+        print(f"S3 sync: downloaded {down}, uploaded {up}")
+        for e in derr + uerr:
+            print("  ! " + e)
+        sys.exit(0 if not (derr + uerr) else 2)
 
     if args.audit:
         sys.exit(0 if audit(args.audit, args.difficulty) else 2)
@@ -102,6 +116,9 @@ def main():
         language=args.lang, language_level=args.level)
 
     print()
+    if path and E.s3_enabled():
+        s3_ok, s3_detail = E.push_story_to_s3(path)
+        print(("✓ s3: " if s3_ok else "✗ s3: ") + s3_detail)
     if path and args.push:
         pushed, detail = E.push_story_to_git(path)
         print(("✓ git: " if pushed else "✗ git: ") + detail)

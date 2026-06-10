@@ -100,6 +100,7 @@ from story_engine import (  # Streamlit-free core (shared with story_agent.py)
     list_stories, load_story_file, unique_story_path, save_story_file,
     validate_story_dict, balance_check, generate_story_api,
     gen_models, create_story, push_story_to_git,
+    s3_enabled, push_story_to_s3, sync_stories_from_s3,
 )
 
 
@@ -510,6 +511,12 @@ def show_library():
     st.markdown("<h1>📖 Quest Book</h1>", unsafe_allow_html=True)
     st.caption("Choose your adventure — or forge a new one.")
 
+    n, errs = st.session_state.get("s3_sync_info", (0, []))
+    if errs:
+        st.warning("Cloud story sync had problems: " + " · ".join(errs[:3]))
+    elif n:
+        st.caption(f"☁️ {n} stor{'y' if n == 1 else 'ies'} synced from cloud storage.")
+
     if st.button("✨  Create a New Story", use_container_width=True):
         st.session_state.screen = "create"
         st.session_state.pop("gen_result", None)
@@ -573,9 +580,12 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
     if ok:
         pushed, push_msg = _push_story_to_git(path)
         title = load_story_file(path).get("title") or theme
-        return {"ok": True, "path": path, "title": title,
-                "pushed": pushed, "push_msg": push_msg,
-                "verdict": summary["balance"], "vlines": summary["bal_lines"], "gates": summary}
+        out = {"ok": True, "path": path, "title": title,
+               "pushed": pushed, "push_msg": push_msg,
+               "verdict": summary["balance"], "vlines": summary["bal_lines"], "gates": summary}
+        if s3_enabled():
+            out["s3_ok"], out["s3_msg"] = push_story_to_s3(path)
+        return out
     if path:   # gates not fully met / a model limit was hit — best draft was kept
         pushed, push_msg = _push_story_to_git(path)
         title = load_story_file(path).get("title") or theme
@@ -586,15 +596,23 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
             reasons.append("coherence (loops or thin opening)")
         if summary and summary.get("balance") != "PASS":
             reasons.append(f"balance ({summary.get('balance')}) for '{difficulty}'")
-        return {"ok": False, "draft": True, "path": path, "title": title, "reasons": reasons,
-                "pushed": pushed, "push_msg": push_msg,
-                "verdict": (summary or {}).get("balance", "—"),
-                "vlines": (summary or {}).get("bal_lines", []),
-                "limit": (summary or {}).get("limit_error")}
+        out = {"ok": False, "draft": True, "path": path, "title": title, "reasons": reasons,
+               "pushed": pushed, "push_msg": push_msg,
+               "verdict": (summary or {}).get("balance", "—"),
+               "vlines": (summary or {}).get("bal_lines", []),
+               "limit": (summary or {}).get("limit_error")}
+        if s3_enabled():
+            out["s3_ok"], out["s3_msg"] = push_story_to_s3(path)
+        return out
     return {"ok": False, "errors": ["The model could not produce any usable story (try again, or check your API key)."]}
 
 
 def _show_push_status(res):
+    if "s3_ok" in res:
+        if res["s3_ok"]:
+            st.caption(f"☁️ Saved to cloud storage — {res.get('s3_msg', '')}")
+        else:
+            st.warning(f"Story saved locally, but **cloud upload failed**: {res.get('s3_msg', 'unknown error')}")
     if "pushed" not in res:
         return
     if res["pushed"]:
@@ -713,6 +731,13 @@ def show_create_page():
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    # one-time per session: pull stories from cloud storage so every machine sees the
+    # same library (QUEST_S3_BUCKET — see story_engine.py)
+    if s3_enabled() and not st.session_state.get("s3_synced"):
+        st.session_state.s3_synced = True
+        n, errs = sync_stories_from_s3()
+        st.session_state.s3_sync_info = (n, errs)
+
     screen = st.session_state.get("screen", "library")
 
     if screen == "create":
