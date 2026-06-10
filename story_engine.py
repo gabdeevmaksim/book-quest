@@ -137,6 +137,55 @@ def save_story_file(story, path):
         json.dump(story, f, indent=2, ensure_ascii=False)
 
 
+def push_story_to_git(path):
+    """Commit a newly saved story and push it to the remote. Returns (ok, detail) and never
+    raises — `detail` carries the exact git error so callers can SHOW it instead of hiding it.
+
+    Headless/Docker friendly:
+    - `safe.directory=*` (bind-mounted repos owned by another uid),
+    - identity fallback when user.name/email are unset (override with QUEST_GIT_NAME/EMAIL),
+    - HTTPS push auth via QUEST_GIT_TOKEN or GITHUB_TOKEN (a GitHub PAT) when no credential
+      helper is available."""
+    import subprocess
+
+    def run(args):
+        try:
+            return subprocess.run(args, capture_output=True, text=True, timeout=60)
+        except Exception as e:  # git missing, timeout, …
+            return subprocess.CompletedProcess(args, 255, "", str(e))
+
+    token = os.environ.get("QUEST_GIT_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
+
+    def redact(s):
+        return (s or "").replace(token, "***") if token else (s or "")
+
+    git = ["git", "-c", "safe.directory=*"]
+    if not run(["git", "config", "user.name"]).stdout.strip():
+        git += ["-c", "user.name=" + os.environ.get("QUEST_GIT_NAME", "Quest Book")]
+    if not run(["git", "config", "user.email"]).stdout.strip():
+        git += ["-c", "user.email=" + os.environ.get("QUEST_GIT_EMAIL", "quest-book@localhost")]
+
+    for stage, cmd in [("add", git + ["add", "-f", path]),
+                       ("commit", git + ["commit", "-m", f"Add story: {os.path.basename(path)}",
+                                         "--", path])]:
+        r = run(cmd)
+        if r.returncode != 0:
+            return False, f"git {stage} failed: {redact(r.stderr or r.stdout).strip()[:300]}"
+
+    push_cmd = git + ["push"]
+    if token:
+        url = run(["git", "remote", "get-url", "--push", "origin"]).stdout.strip()
+        if url.startswith("https://") and "@" not in url:
+            push_cmd = git + ["push",
+                              url.replace("https://", f"https://x-access-token:{token}@", 1),
+                              "HEAD"]
+    r = run(push_cmd)
+    if r.returncode != 0:
+        return False, ("committed locally, but git push failed: "
+                       + redact(r.stderr or r.stdout).strip()[:300])
+    return True, "committed and pushed to the remote"
+
+
 # ── gates: correctness + balance ───────────────────────────────────────────────
 @lru_cache(maxsize=1)
 def _load_validator():

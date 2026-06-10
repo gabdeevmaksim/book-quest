@@ -99,7 +99,7 @@ from story_engine import (  # Streamlit-free core (shared with story_agent.py)
     gen_provider, gen_default_model, env_api_key,
     list_stories, load_story_file, unique_story_path, save_story_file,
     validate_story_dict, balance_check, generate_story_api,
-    gen_models, create_story,
+    gen_models, create_story, push_story_to_git,
 )
 
 
@@ -547,17 +547,9 @@ def show_library():
 
 
 def _push_story_to_git(path):
-    """Best-effort: commit and push a newly saved story to the git remote."""
-    import subprocess
-    try:
-        subprocess.run(["git", "add", "-f", path], check=True, capture_output=True)
-        subprocess.run(
-            ["git", "commit", "-m", f"Add story: {os.path.basename(path)}"],
-            check=True, capture_output=True,
-        )
-        subprocess.run(["git", "push"], check=True, capture_output=True)
-    except Exception:
-        pass  # non-fatal — story is already saved to disk
+    """Commit + push the new story (story_engine.push_story_to_git). Non-fatal, but the
+    outcome is RETURNED so the UI can show why a push didn't happen instead of hiding it."""
+    return push_story_to_git(path)
 
 
 def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model,
@@ -579,12 +571,13 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
     except Exception as e:
         return {"ok": False, "errors": [f"Generation failed: {e}"]}
     if ok:
-        _push_story_to_git(path)
+        pushed, push_msg = _push_story_to_git(path)
         title = load_story_file(path).get("title") or theme
         return {"ok": True, "path": path, "title": title,
+                "pushed": pushed, "push_msg": push_msg,
                 "verdict": summary["balance"], "vlines": summary["bal_lines"], "gates": summary}
     if path:   # gates not fully met / a model limit was hit — best draft was kept
-        _push_story_to_git(path)
+        pushed, push_msg = _push_story_to_git(path)
         title = load_story_file(path).get("title") or theme
         reasons = []
         if summary and not summary.get("correctness"):
@@ -594,10 +587,22 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
         if summary and summary.get("balance") != "PASS":
             reasons.append(f"balance ({summary.get('balance')}) for '{difficulty}'")
         return {"ok": False, "draft": True, "path": path, "title": title, "reasons": reasons,
+                "pushed": pushed, "push_msg": push_msg,
                 "verdict": (summary or {}).get("balance", "—"),
                 "vlines": (summary or {}).get("bal_lines", []),
                 "limit": (summary or {}).get("limit_error")}
     return {"ok": False, "errors": ["The model could not produce any usable story (try again, or check your API key)."]}
+
+
+def _show_push_status(res):
+    if "pushed" not in res:
+        return
+    if res["pushed"]:
+        st.caption("✅ Pushed to the git remote.")
+    else:
+        st.warning(f"Story saved, but **not pushed to git**: {res.get('push_msg', 'unknown error')}")
+        st.caption("Headless server? Set `QUEST_GIT_TOKEN` (a GitHub PAT) in the environment / `.env`; "
+                   "identity can be set with `QUEST_GIT_NAME` / `QUEST_GIT_EMAIL`.")
 
 
 def show_create_page():
@@ -612,6 +617,7 @@ def show_create_page():
         if res.get("ok"):
             st.success(f"Created **“{res['title']}”** — saved to `{res['path']}`.")
             st.caption("Passed every gate: validate ✓ · coherence ✓ · balance PASS")
+            _show_push_status(res)
             for ln in res.get("vlines", []):
                 st.caption(f"· {ln}")
             c1, c2 = st.columns(2)
@@ -627,6 +633,7 @@ def show_create_page():
             if res.get("limit"):
                 st.caption(f"A model limit was hit mid-run ({str(res['limit'])[:100]}…), so it stopped early.")
             st.caption("It's in your library marked **DRAFT** — playable now, or regenerate later for a clean version.")
+            _show_push_status(res)
             for ln in res.get("vlines", []):
                 st.caption(f"· {ln}")
             c1, c2 = st.columns(2)

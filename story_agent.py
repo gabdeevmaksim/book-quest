@@ -67,6 +67,9 @@ def main():
                          "(default: provider chain / QUEST_GEN_MODELS)")
     ap.add_argument("--max-attempts", type=int, default=6)
     ap.add_argument("--out", default=None, help="explicit output path (default: stories/<slug>.json)")
+    ap.add_argument("--push", action="store_true",
+                    help="after saving, git commit + push the story to the remote "
+                         "(headless auth: set QUEST_GIT_TOKEN / GITHUB_TOKEN)")
     ap.add_argument("--save-draft", action="store_true",
                     help="if it can't pass all gates / a model limit is hit, save the best draft anyway (marked DRAFT)")
     ap.add_argument("--audit", default=None, metavar="STORY.json",
@@ -99,6 +102,9 @@ def main():
         language=args.lang, language_level=args.level)
 
     print()
+    if path and args.push:
+        pushed, detail = E.push_story_to_git(path)
+        print(("✓ git: " if pushed else "✗ git: ") + detail)
     if ok:
         n = len(E.load_story_file(path).get("locations", {}))
         bal = "  ".join(summary["bal_lines"][:2])

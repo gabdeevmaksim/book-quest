@@ -137,6 +137,12 @@ an existing story without generating.
 
 Paths: `QUEST_STORIES_DIR` (`stories`), `QUEST_STORY` (`story.json`, legacy fallback).
 
+**Git auto-push of new stories** (`story_engine.push_story_to_git`, used by the Create page and
+`story_agent.py --push`): commits `Add story: <file>` and pushes. It returns `(ok, detail)` and
+the UI/CLI display the result — failures are never silent. Headless/Docker: HTTPS push auth via
+`QUEST_GIT_TOKEN` (or `GITHUB_TOKEN`, a GitHub PAT); identity fallback `QUEST_GIT_NAME` /
+`QUEST_GIT_EMAIL` (defaults `Quest Book <quest-book@localhost>`); `safe.directory` is handled.
+
 In-app generation is **provider-agnostic** — it auto-selects from whichever key is set, or
 honors `QUEST_GEN_PROVIDER` (`google` | `anthropic`):
 - **Google Gemini** (default): `GOOGLE_API_KEY` (or `GEMINI_API_KEY`); chain `gemini-3.5-flash → gemini-2.5-flash → gemini-2.5-flash-lite`.
