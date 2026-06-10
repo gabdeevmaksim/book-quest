@@ -32,7 +32,10 @@ set in the environment or pasted into the Create page.
 Two orchestrators run the whole pipeline (draft → validate → coherence → balance, with a repair
 loop): the **`story-smith` agent** (`.claude/agents/story-smith.md`, for Claude Code), and the
 standalone **`story_agent.py`** CLI, which needs only a free Google Gemini key — no Claude Code,
-no Anthropic (`GOOGLE_API_KEY=… python3 story_agent.py "<theme>" -d hard`). Manually, the steps are:
+no Anthropic (`GOOGLE_API_KEY=… python3 story_agent.py "<theme>" -d hard`). Stories can be
+generated in **any language at a CEFR level** (`-l/--lang Italian --level B1` on the CLI;
+Language + level controls on the in-app Create page) — useful for language learners. Manually,
+the steps are:
 
 1. **Create** a story:
    - **In-app**: *Create a New Story* → theme + difficulty → the app writes it (Gemini/Claude),
@@ -72,6 +75,7 @@ and a way back to the library — but you should still validate every story.
 **Story schema** (all engine-honored fields):
 ```
 title, theme, difficulty, goal, prologue,
+language?, language_level?,   # any language + CEFR A1-C2 (defaults: English / C2)
 character_template { health, strength, agility, stamina },
 items { id: { name, icon, description, use?:{heal:N} } },
 start_location_id,
@@ -91,8 +95,12 @@ locations { id: {
   presets). Also used verbatim as the system prompt by the in-app generator.
 - `cyoa-validator`: `validate_story.py` — link/reachability/reach-an-ending checks
   (cycle-safe reverse-reachability) with an optional `--fix`; and `coherence_report.py` —
-  connectivity + pre-history linter (free-movement loops, backtrack ratio, prologue/opening),
-  prints `COHERENCE: OK`/`REVIEW`.
+  connectivity + pre-history + quality linter: free-movement loops, backtrack ratio,
+  prologue/opening, **linearity** (fails corridors: >40% single-choice locations, avg
+  choices <1.6, or 4+ single-choice locations in a row), **item grounding** (every
+  `loot`/`gives_item` grant must be mentioned in the location description or choice text —
+  language-agnostic token match on the item's name+description), and **double-collectable
+  items** (same item grantable twice on one reachable path). Prints `COHERENCE: OK`/`REVIEW`.
 
 **`.claude/agents/story-smith.md`** — orchestrator subagent that runs the whole pipeline
 (draft → validate → coherence → balance) with a repair loop; also audits/repairs existing stories.

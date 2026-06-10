@@ -47,6 +47,43 @@ def all_targets(loc):
     return out
 
 
+_STOP = {"with", "that", "this", "your", "from", "into", "when", "have", "will",
+         "restores", "grants", "gives", "bonus", "consuming", "using", "used"}
+
+
+def _tokens(text, min_len=3):
+    """Significant lowercase word tokens (works for any language)."""
+    import re
+    return [t for t in re.split(r"[^\w]+", (text or "").casefold())
+            if len(t) >= min_len and t not in _STOP]
+
+
+def item_grant_points(story):
+    """Yield (item_id, loc_id, how, context_text) for every place an item is granted."""
+    locs = story.get("locations", {})
+    for lid, loc in locs.items():
+        desc = loc.get("description", "") or ""
+        for it in coerce(loc.get("loot")):
+            yield it, lid, "loot", desc
+        for c in loc.get("choices", []):
+            if c.get("gives_item"):
+                yield c["gives_item"], lid, "gives_item", desc + " " + (c.get("text") or "")
+
+
+def corridor_runs(locs):
+    """Longest chain of consecutive single-choice, non-end locations."""
+    single = {n for n, l in locs.items()
+              if not l.get("is_end") and len(l.get("choices", [])) == 1}
+    best = 0
+    for n in single:
+        run, cur, seen = 0, n, set()
+        while cur in single and cur not in seen:
+            seen.add(cur); run += 1
+            cur = locs[cur]["choices"][0].get("target_id")
+        best = max(best, run)
+    return single, best
+
+
 def sccs_with_cycle(nodes, adj):
     """Tarjan SCCs; return components that contain a cycle (size>1, or a self-loop)."""
     sys.setrecursionlimit(10000)
@@ -156,6 +193,56 @@ def main():
     if overloaded:
         issues.append(("flow", f"locations with >6 choices (overwhelming): {overloaded}"))
 
+    # --- linearity: the story must not read like a corridor ---
+    mid = [n for n in nodes if not locs[n].get("is_end")]
+    single, longest_run = corridor_runs(locs)
+    single_ratio = len(single) / len(mid) if mid else 0.0
+    avg_mid = sum(len(locs[n].get("choices", [])) for n in mid) / max(len(mid), 1)
+    if single_ratio > 0.40:
+        issues.append(("linear", f"{len(single)}/{len(mid)} ({single_ratio:.0%}) non-end locations "
+                       f"have exactly ONE choice — the story is a corridor, not an adventure; "
+                       f"give most locations 2-3 meaningful choices"))
+    if avg_mid < 1.6 and len(mid) >= 6:
+        issues.append(("linear", f"avg {avg_mid:.2f} choices per non-end location (< 1.6) — "
+                       f"add real branching"))
+    if longest_run > 3:
+        issues.append(("linear", f"a chain of {longest_run} consecutive single-choice locations — "
+                       f"break corridors up with decisions (max 2-3 in a row)"))
+
+    # --- items: every grant must be grounded in the narrative ---
+    items = story.get("items", {})
+    ungrounded, grants_by_item = [], defaultdict(list)
+    for it, lid, how, ctx in item_grant_points(story):
+        grants_by_item[it].append(lid)
+        idef = items.get(it, {}) or {}
+        name = idef.get("name", "") or it.replace("_", " ")
+        toks = (_tokens(name, 3) or [name.casefold()]) + _tokens(idef.get("description", ""), 5)
+        if not any(t in ctx.casefold() for t in toks):
+            ungrounded.append(f"'{it}' at '{lid}' ({how})")
+    if ungrounded:
+        issues.append(("items", f"item(s) granted but never mentioned in the location/choice text — "
+                       f"they appear out of nowhere: " + "; ".join(ungrounded[:6])
+                       + ". Weave each item into the description, or grant it via an explicit "
+                       f"'take it' choice (gives_item)"))
+    # duplicate grants are a problem only if the player can collect both copies
+    dup = []
+    for it, lids in grants_by_item.items():
+        uniq = sorted(set(lids))
+        if len(uniq) > 1:
+            for i, a in enumerate(uniq):
+                for b in uniq[i + 1:]:
+                    seen, q = {a}, deque([a])
+                    while q:
+                        n = q.popleft()
+                        for t in all_targets(locs.get(n, {})):
+                            if t == b:
+                                dup.append(f"'{it}' ({a} -> {b})"); q.clear(); break
+                            if t in locs and t not in seen:
+                                seen.add(t); q.append(t)
+    if dup:
+        issues.append(("items", f"same item collectable twice on one path: " + "; ".join(dup[:4])
+                       + " — keep one grant per reachable path"))
+
     W = 66
     print("=" * W)
     print("  CYOA Coherence & Pre-history Report")
@@ -171,6 +258,10 @@ def main():
     print(f"  free-movement loops: {len(loops)}"
           + (f" -> {[sorted(c) for c in loops][:4]}" if loops else ""))
     print(f"  pre-history: prologue {len(prologue)} | goal {len(goal)} | start-desc {len(startdesc)} chars")
+    print(f"  linearity: {len(single)}/{len(mid)} single-choice mid locations "
+          f"({single_ratio:.0%}) | avg mid choices {avg_mid:.2f} | longest corridor {longest_run}")
+    print(f"  item grants: {sum(len(v) for v in grants_by_item.values())} "
+          f"| ungrounded {len(ungrounded)} | double-collectable {len(dup)}")
 
     if issues:
         print(f"\n  REVIEW — {len(issues)} item(s) to address:")

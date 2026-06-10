@@ -498,6 +498,14 @@ def _draft_badge(is_draft):
             "letter-spacing:1px;margin-right:5px'>DRAFT</span>")
 
 
+def _lang_tag(s):
+    lang = (s.get("language") or "").strip()
+    if not lang or lang.lower() == "english":
+        return ""
+    lvl = (s.get("language_level") or "").strip()
+    return f" · 🗣 {lang}" + (f" ({lvl})" if lvl else "")
+
+
 def show_library():
     st.markdown("<h1>📖 Quest Book</h1>", unsafe_allow_html=True)
     st.caption("Choose your adventure — or forge a new one.")
@@ -529,7 +537,7 @@ def show_library():
                 f"<span style='color:#d4a843;font-family:\"Special Elite\",Georgia,serif;font-size:1.05rem;line-height:1.3'>{s['title']}</span>"
                 f"<span style='white-space:nowrap'>{_draft_badge(s.get('draft'))}{_difficulty_badge(s['difficulty'])}</span></div>"
                 f"<div style='color:#6a5a42;font-size:0.74rem;font-family:monospace;margin:0.25rem 0 0.5rem'>"
-                f"🌍 {s['theme']} · {s['n']} locations</div>"
+                f"🌍 {s['theme']} · {s['n']} locations{_lang_tag(s)}</div>"
                 f"<div style='color:#a99878;font-size:0.84rem;line-height:1.5'>{goal}</div></div>",
                 unsafe_allow_html=True,
             )
@@ -552,7 +560,8 @@ def _push_story_to_git(path):
         pass  # non-fatal — story is already saved to disk
 
 
-def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model):
+def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model,
+                 language="English", language_level="C2"):
     # The chosen model is tried first; the rest of the provider's chain are automatic
     # fallbacks if it hits a free-tier limit. create_story runs the FULL gated pipeline
     # (validate -> coherence -> balance, with repair) and only returns ok=True once a story
@@ -561,7 +570,8 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
     try:
         ok, path, summary = create_story(theme, difficulty, length, title_hint, api_key,
                                          provider=provider, models=models, max_attempts=5,
-                                         keep_best=True)
+                                         keep_best=True, language=language,
+                                         language_level=language_level)
     except ImportError:
         pkg = PROVIDER_PKG.get(provider, provider)
         return {"ok": False, "errors": [f"The '{pkg}' Python package isn't installed. "
@@ -650,6 +660,16 @@ def show_create_page():
     length = c2.slider("Approx. number of locations", 8, 20, 14)
     title_hint = st.text_input("Title (optional)", placeholder="Leave blank to let the model name it")
 
+    c3, c4 = st.columns([2, 3])
+    language = c3.text_input("Language", value="English",
+                             help="The language ALL story text is written in.")
+    _levels = ["A1 — beginner", "A2 — elementary", "B1 — intermediate",
+               "B2 — upper-intermediate", "C1 — advanced", "C2 — native"]
+    language_level = c4.select_slider(
+        "Language level (CEFR)", options=_levels, value=_levels[-1],
+        help="Pick a lower level for language learning: simpler words, shorter sentences.",
+    ).split(" ")[0]
+
     detected = gen_provider()
     with st.expander("⚙  Model & API key", expanded=not env_api_key(detected)):
         provs = ["google", "anthropic"]
@@ -678,7 +698,8 @@ def show_create_page():
                             "validate → coherence → balance gates (auto-repairing, and switching "
                             "models if a free-tier limit is hit). This can take a couple of minutes."):
                 st.session_state.gen_result = _do_generate(
-                    theme.strip(), difficulty, length, title_hint.strip(), api_key, provider, model)
+                    theme.strip(), difficulty, length, title_hint.strip(), api_key, provider,
+                    model, language.strip() or "English", language_level)
             st.rerun()
 
 

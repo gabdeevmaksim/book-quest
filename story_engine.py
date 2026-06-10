@@ -100,10 +100,13 @@ def list_stories():
                 "goal": d.get("goal", ""),
                 "n": len(d.get("locations", {})),
                 "draft": bool(d.get("draft")),
+                "language": d.get("language", ""),
+                "language_level": d.get("language_level", ""),
             })
         except Exception as e:
             out.append({"path": p, "title": os.path.basename(p), "error": str(e),
-                        "theme": "", "difficulty": "", "goal": "", "n": 0, "draft": False})
+                        "theme": "", "difficulty": "", "goal": "", "n": 0, "draft": False,
+                        "language": "", "language_level": ""})
     return out
 
 
@@ -267,7 +270,34 @@ def call_with_fallback(provider, models, system, messages, api_key, log=None):
     raise RuntimeError("no models configured")
 
 
-def build_prompts(theme, difficulty, length, title_hint=""):
+CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
+
+
+def _language_clause(language, language_level):
+    """Prompt fragment enforcing the story language and CEFR level."""
+    language = (language or "English").strip() or "English"
+    level = (language_level or "C2").strip().upper()
+    if level not in CEFR_LEVELS:
+        level = "C2"
+    style = {
+        "A1": "very short, simple sentences (max ~8 words), present tense only, only the most "
+              "common everyday words, repeat key words instead of using synonyms",
+        "A2": "short, simple sentences, mostly present tense, high-frequency vocabulary, "
+              "no idioms or rare words",
+        "B1": "clear everyday narrative, moderate sentence length, common idioms only",
+        "B2": "natural fluent narrative, varied sentence structure, everyday idioms allowed",
+        "C1": "rich, nuanced prose with idiom and atmosphere",
+        "C2": "full native richness — idiom, subtext, and atmosphere",
+    }[level]
+    return (
+        f'Language: write ALL player-facing text (title, goal, prologue, location descriptions, '
+        f'choice texts, item names and descriptions, monster names) in {language} at CEFR level '
+        f'{level}: {style}. Keep JSON keys, location ids and item ids in English snake_case. '
+        f'Set the top-level fields "language": "{language}" and "language_level": "{level}".\n'
+    )
+
+
+def build_prompts(theme, difficulty, length, title_hint="", language="English", language_level="C2"):
     """Return (system, user) prompts. The spec file is the authoritative system prompt."""
     spec = open(GENERATOR_SPEC).read() if os.path.exists(GENERATOR_SPEC) else ""
     system = (
@@ -282,6 +312,7 @@ def build_prompts(theme, difficulty, length, title_hint=""):
         f"Target size: about {length} locations, with 3-5 endings (include at least one "
         f"non-victory ending using is_victory:false).\n"
         + (f'Preferred title: "{title_hint}"\n' if title_hint else "")
+        + _language_clause(language, language_level)
         + f'Set the top-level "difficulty" field to "{difficulty}" and tune health, check DCs, '
           f"fail_damage and monsters to the {difficulty} preset in the spec.\n"
         + "Write a 'prologue' (3-6 sentences of pre-history: who the player is, the world, the "
@@ -289,16 +320,23 @@ def build_prompts(theme, difficulty, length, title_hint=""):
           "link logically, no random teleports, no set of rooms the player can circle at zero "
           "cost, and most choices moving the story FORWARD. Every location must be reachable and "
           "able to reach an ending; no dead items; no zero-cost infinite-retry checks; give every "
-          "monster a flee or alternate route."
+          "monster a flee or alternate route.\n"
+        + "BRANCHING: most non-ending locations need 2-3 meaningful choices; never chain more "
+          "than 2-3 single-choice locations in a row (a corridor fails the coherence gate).\n"
+        + "ITEMS: every item must be introduced in the narrative — mention the object in the "
+          "granting location's description or grant it via an explicit pick-up choice "
+          "(gives_item). Items must never appear out of nowhere, and the same item must not be "
+          "collectable twice on one path."
     )
     return system, user
 
 
-def generate_story_api(theme, difficulty, length, title_hint, api_key, provider, model):
+def generate_story_api(theme, difficulty, length, title_hint, api_key, provider, model,
+                       language="English", language_level="C2"):
     """Author a story via the chosen provider; validate + repair (correctness only) up to 3 times.
     Returns (story_or_None, problems_list) — problems empty == passes correctness.
     (The CLI agent in story_agent.py wraps this with the coherence + balance gates too.)"""
-    system, user = build_prompts(theme, difficulty, length, title_hint)
+    system, user = build_prompts(theme, difficulty, length, title_hint, language, language_level)
     messages = [{"role": "user", "content": user}]
     story, problems = None, ["no output produced"]
     for _ in range(3):
@@ -340,7 +378,7 @@ def gate_report(path, difficulty):
 
 def create_story(theme, difficulty, length=14, title="", api_key=None, provider=None,
                  models=None, out_path=None, max_attempts=6, model_call=None, log=None,
-                 keep_best=False):
+                 keep_best=False, language="English", language_level="C2"):
     """Draft a story and iterate draft → validate → coherence → balance until EVERY gate passes,
     then save it. Returns (ok, saved_path_or_None, summary).
 
@@ -357,7 +395,7 @@ def create_story(theme, difficulty, length=14, title="", api_key=None, provider=
     models = models or gen_models(provider)
     if api_key is None:
         api_key = env_api_key(provider)
-    system, user = build_prompts(theme, difficulty, length, title)
+    system, user = build_prompts(theme, difficulty, length, title, language, language_level)
     if model_call is None:
         def model_call(system, messages):
             text, _used = call_with_fallback(provider, models, system, messages, api_key, log=log)

@@ -38,7 +38,7 @@
   "start_location_id": "training_ground",
   "locations": {
     "training_ground": {
-      "description": "The iconic Juventus training ground. The air crackles with anticipation, but also with the weight of expectation. Edik and Del Piero stand before you, the new leadership. The path ahead is arduous, filled with demanding training, skeptical media, and fierce rivals.",
+      "description": "The iconic Juventus training ground. The air crackles with anticipation, but also with the weight of expectation. Edik and Del Piero stand before you, the new leadership. The path ahead is arduous, filled with demanding training, skeptical media, and fierce rivals. Before the first drill, Del Piero drapes a vintage Juve jersey over your shoulders — 'Wear the history,' he smiles.",
       "loot": [
         "vintage_jersey"
       ],
@@ -155,7 +155,7 @@
       ]
     },
     "peak_conditioning": {
-      "description": "You have pushed your physical limits. Your stamina is at an all-time high, and your movements feel fluid.",
+      "description": "You have pushed your physical limits. Your stamina is at an all-time high, and your movements feel fluid. Impressed, Del Piero kneels and laces you into his diamond studded boots — 'They carried me through finals. Now they're yours.'",
       "loot": [
         "diamond_studs"
       ],
@@ -163,11 +163,15 @@
         {
           "text": "Go to the locker room, ready to run all day.",
           "target_id": "locker_room"
+        },
+        {
+          "text": "Carry the momentum into Del Piero's tactics session.",
+          "target_id": "tactical_briefing"
         }
       ]
     },
     "technical_mastery": {
-      "description": "Your technique is now flawless. Your dribbling is sublime, your passes incisive. You move with grace and precision.",
+      "description": "Your technique is now flawless. Your dribbling is sublime, your passes incisive. You move with grace and precision. Edik nods once, then sets a box at your feet: Del Piero's diamond studded boots, polished and waiting. 'Earned,' is all he says.",
       "loot": [
         "diamond_studs"
       ],
@@ -175,6 +179,10 @@
         {
           "text": "Go to the locker room, ready to weave through defenses.",
           "target_id": "locker_room"
+        },
+        {
+          "text": "Show your sharpened touch to the waiting press.",
+          "target_id": "press_conference"
         }
       ]
     },
@@ -184,6 +192,10 @@
         {
           "text": "Go to the locker room, ready to command the pitch.",
           "target_id": "locker_room"
+        },
+        {
+          "text": "Test the new insights against the journalists' hard questions.",
+          "target_id": "press_conference"
         }
       ]
     },
@@ -193,6 +205,10 @@
         {
           "text": "Go to the locker room, inspired.",
           "target_id": "locker_room"
+        },
+        {
+          "text": "Ask him to turn the stories into a plan for your rivals.",
+          "target_id": "strategic_advantage"
         }
       ]
     },
@@ -202,6 +218,10 @@
         {
           "text": "Go to the locker room.",
           "target_id": "locker_room"
+        },
+        {
+          "text": "Temper the bravado — pivot the room to team unity.",
+          "target_id": "team_focus"
         }
       ]
     },
@@ -211,6 +231,10 @@
         {
           "text": "Go to the locker room.",
           "target_id": "locker_room"
+        },
+        {
+          "text": "Channel the calm into preparation — join the tactics session.",
+          "target_id": "tactical_briefing"
         }
       ]
     },
@@ -330,7 +354,7 @@
       ]
     },
     "champions_league_group_stage": {
-      "description": "You've made it to the prestigious group stages! Juventus is back in Europe. The atmosphere is electric.",
+      "description": "You've made it to the prestigious group stages! Juventus is back in Europe. The atmosphere is electric. The club physio presses an emergency medical kit into your bag — 'European nights leave marks. Be ready.'",
       "loot": [
         "medical_kit"
       ],

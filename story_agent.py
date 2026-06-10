@@ -56,6 +56,11 @@ def main():
     ap.add_argument("-d", "--difficulty", default="normal", choices=E.DIFFICULTIES)
     ap.add_argument("-n", "--length", type=int, default=14, help="approx. number of locations")
     ap.add_argument("-t", "--title", default="", help="preferred title (optional)")
+    ap.add_argument("-l", "--lang", default="English",
+                    help='language of all story text, e.g. "Italian" (default: English)')
+    ap.add_argument("--level", default="C2", choices=E.CEFR_LEVELS,
+                    help="CEFR language level of the prose (default: C2 = native richness; "
+                         "pick A2/B1 for language learning)")
     ap.add_argument("--provider", default=None, help="google | anthropic (default: auto-detect)")
     ap.add_argument("--models", default=None,
                     help="comma-separated fallback chain, e.g. gemini-3.5-flash,gemini-2.5-flash "
@@ -84,12 +89,14 @@ def main():
         sys.exit(1)
 
     print(f"Story-Smith → theme={args.theme!r}  difficulty={args.difficulty}  "
+          f"language={args.lang} ({args.level})  "
           f"provider={E.PROVIDER_LABEL.get(provider, provider)}")
     print(f"  model chain (auto-fallback on limit): {' → '.join(models)}")
     ok, path, summary = E.create_story(
         args.theme, args.difficulty, args.length, args.title, api_key,
         provider=provider, models=models, out_path=args.out,
-        max_attempts=args.max_attempts, keep_best=args.save_draft, log=lambda *a: print(*a))
+        max_attempts=args.max_attempts, keep_best=args.save_draft, log=lambda *a: print(*a),
+        language=args.lang, language_level=args.level)
 
     print()
     if ok:

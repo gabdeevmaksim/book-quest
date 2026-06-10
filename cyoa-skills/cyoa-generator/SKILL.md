@@ -63,6 +63,8 @@ Never hand back a story that has not passed steps 2, 3 and 4.
   "title": "Story Title",
   "theme": "The theme",
   "difficulty": "normal",                 // metadata; record what you targeted
+  "language": "English",                  // language of ALL player-facing text (default English)
+  "language_level": "C2",                 // CEFR level of the prose: A1|A2|B1|B2|C1|C2 (default C2/native)
   "goal": "One sentence describing what winning looks like.",
   "prologue": "3-6 sentences of pre-history, shown on the character screen before play: who you are, the world, the inciting incident, and the stakes.",
   "character_template": { "health": 18, "strength": 10, "agility": 10, "stamina": 10 },
@@ -164,11 +166,24 @@ heroic death ≥30% (still beatable).
   `gives_item`) on an earlier, reachable path.
 - **Spread the stats**: use all three of strength/agility/stamina across checks so no
   single dump-stat trivializes or bricks a run.
+- **Ground every item in the narrative**: an item must never appear out of nowhere. The
+  location description (or the choice text that grants it) MUST mention the object —
+  "a vintage jersey hangs in the locker", "you pry the iron key from the lock". Prefer an
+  explicit pick-up choice with `gives_item` ("Take the lantern from the hook") over silent
+  `loot`; if you do use `loot`, the description must introduce the object. The coherence
+  gate flags ungrounded grants.
+- **One grant per path**: never let the same item be collected twice on a single playthrough.
+  Granting it on two *mutually exclusive* branches is fine; two grants on one reachable
+  path is a flag.
 
 ### Connectivity & opening (what makes a story feel finished, not chaotic)
 - **Coherent map**: design locations as a real place with regions that connect logically.
   Every choice's destination must follow from its text — no random teleports. Aim for ~2–4
   choices per location; never exceed 6.
+- **Branch, don't railroad**: most non-ending locations need **2–3 meaningful choices** that
+  lead to *different* outcomes. At most ~⅓ may have a single choice, and never more than 2–3
+  single-choice locations in a row. The coherence gate fails corridors (>40% single-choice
+  locations, avg <1.6 choices, or a chain of 4+).
 - **Forward motion**: most choices should advance the story. Keep backtracking low
   (`coherence_report.py` flags >35%). A hub is fine *only* if each spoke has real content and
   you cannot circle a set of rooms endlessly at no cost (no aimless free-movement loops).
@@ -177,6 +192,23 @@ heroic death ≥30% (still beatable).
 - **Real pre-history**: always write a `prologue` (3–6 sentences) that drops the player into
   the world — who they are, what just happened, why it matters — then orient them in the
   start location's opening scene. Thin/missing pre-history is a coherence REVIEW failure.
+
+## Language & language level
+
+Stories can be written in **any language**, at a target **CEFR level** — useful for language
+learners. Two top-level fields record the choice: `language` (e.g. "Italian") and
+`language_level` (A1–C2). Rules:
+
+- ALL player-facing text — title, goal, prologue, descriptions, choice texts, item names,
+  item descriptions, monster names, ending texts — is written in `language`. JSON keys,
+  location ids, and item ids stay in English (`snake_case`).
+- Match the prose to the CEFR level: **A1/A2** — present tense, short sentences (max ~8–10
+  words), only high-frequency vocabulary, repeat key words instead of using synonyms;
+  **B1/B2** — natural everyday narrative, common idioms allowed, moderate sentence length;
+  **C1/C2** — full native richness, atmosphere, idiom, and subtext.
+- Keep descriptions at lower levels *shorter* (1–2 simple sentences) rather than padding to
+  the usual 2–4; the story should stay vivid through concrete nouns and actions.
+- Default when unspecified: `language: "English"`, `language_level: "C2"`.
 
 ## Resources
 - `references/sample_story.json` — a small, clean, schema-complete example (normal difficulty).
