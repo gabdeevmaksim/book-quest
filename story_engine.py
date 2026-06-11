@@ -24,6 +24,28 @@ import tempfile
 import subprocess
 from functools import lru_cache
 
+def _load_dotenv(path=".env"):
+    """Minimal .env loader (no dependency) so the CLI works outside docker-compose.
+    Reads KEY=VALUE lines (also `export KEY=VALUE`); never overrides variables that
+    are already set in the environment."""
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                if line.startswith("export "):
+                    line = line[len("export "):]
+                k, _, v = line.partition("=")
+                k, v = k.strip(), v.strip().strip("'\"")
+                if k and k not in os.environ:
+                    os.environ[k] = v
+    except OSError:
+        pass
+
+
+_load_dotenv()
+
 # ── config ─────────────────────────────────────────────────────────────────────
 STORIES_DIR    = os.environ.get("QUEST_STORIES_DIR", "stories")
 VALIDATOR_PATH = os.path.join("cyoa-skills", "cyoa-validator", "scripts", "validate_story.py")
