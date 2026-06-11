@@ -22,7 +22,6 @@ COPY app.py .
 COPY story_engine.py .
 COPY story_agent.py .
 COPY playtest.py .
-COPY story.json .
 COPY stories/ ./stories/
 COPY cyoa-skills/ ./cyoa-skills/
 

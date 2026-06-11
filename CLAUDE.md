@@ -69,9 +69,6 @@ and a way back to the library — but you should still validate every story.
 **`stories/`** — the story library. Each `*.json` is one adventure; the gallery shows its
 `title`, `theme`, `difficulty`, and `goal`. New stories are saved here.
 
-**`story.json`** (repo root) — legacy single-story file; used only as a fallback when
-`stories/` is empty.
-
 **Story schema** (all engine-honored fields):
 ```
 title, theme, difficulty, goal, prologue,
@@ -135,7 +132,7 @@ an existing story without generating.
 
 ## Config and Environment
 
-Paths: `QUEST_STORIES_DIR` (`stories`), `QUEST_STORY` (`story.json`, legacy fallback).
+Paths: `QUEST_STORIES_DIR` (default `stories`).
 
 **S3-compatible story storage** (optional; AWS S3 / Cloudflare R2 / Backblaze B2 / MinIO):
 set `QUEST_S3_BUCKET` to enable. The bucket is the durable cross-machine store; `stories/`

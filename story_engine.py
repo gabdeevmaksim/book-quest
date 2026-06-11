@@ -26,7 +26,6 @@ from functools import lru_cache
 
 # ── config ─────────────────────────────────────────────────────────────────────
 STORIES_DIR    = os.environ.get("QUEST_STORIES_DIR", "stories")
-LEGACY_STORY   = os.environ.get("QUEST_STORY", "story.json")
 VALIDATOR_PATH = os.path.join("cyoa-skills", "cyoa-validator", "scripts", "validate_story.py")
 COHERENCE_PATH = os.path.join("cyoa-skills", "cyoa-validator", "scripts", "coherence_report.py")
 PLAYTEST_PATH  = "playtest.py"
@@ -83,11 +82,9 @@ def env_api_key(provider):
 
 # ── story library IO ─────────────────────────────────────────────────────────
 def list_stories():
-    """Metadata for every story in the library (always includes legacy story.json if present)."""
+    """Metadata for every story in the library (stories/*.json)."""
     paths = sorted(p for p in glob.glob(os.path.join(STORIES_DIR, "*.json"))
                    if not os.path.basename(p).startswith((".", "_")))
-    if os.path.exists(LEGACY_STORY):
-        paths = [LEGACY_STORY] + paths
     out = []
     for p in paths:
         try:

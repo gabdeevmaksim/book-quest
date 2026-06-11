@@ -4,7 +4,9 @@ import json, random, sys
 from collections import defaultdict, deque
 from itertools import product
 
-STORY = sys.argv[1] if len(sys.argv) > 1 else "story.json"
+if len(sys.argv) < 2:
+    sys.exit("usage: playtest.py stories/<story>.json [easy|normal|hard]")
+STORY = sys.argv[1]
 DIFF  = sys.argv[2].lower() if len(sys.argv) > 2 else None   # easy | normal | hard
 # expected (cautious win %, heroic death %) bands per difficulty tier
 BANDS = {

@@ -781,7 +781,7 @@ def main():
     if loc_key not in st.session_state.locations:
         st.error(
             f"⚠ Broken story link: location '{loc_key}' does not exist. "
-            f"This is a story-data bug — run the validator on story.json."
+            f"This is a story-data bug — run the validator on this story's file in stories/."
         )
         show_end_buttons(story)
         return
