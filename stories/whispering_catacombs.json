@@ -45,8 +45,8 @@
           "target_id": "reliquary",
           "condition": {
             "attribute": "strength",
-            "check_value": 13,
-            "dice_type": "2d6",
+            "check_value": 7,
+            "dice_type": "1d6",
             "fail_damage": 3
           }
         }
@@ -74,9 +74,9 @@
       "is_end": false,
       "monster": {
         "name": "Bone Sentinel",
-        "strength": 15,
+        "strength": 9,
         "fail_damage": 6,
-        "dice_type": "2d6",
+        "dice_type": "1d6",
         "attribute": "strength"
       },
       "choices": [
@@ -91,8 +91,8 @@
           "is_flee": true,
           "condition": {
             "attribute": "agility",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 6
           }
         },
@@ -114,8 +114,8 @@
           "target_id": "sanctum_door",
           "condition": {
             "attribute": "agility",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 8,
+            "dice_type": "1d6",
             "fail_damage": 3,
             "item_bonus": {
               "item": "charm",
@@ -164,8 +164,8 @@
           "target_id": "sealed_well",
           "condition": {
             "attribute": "stamina",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 5,
             "fail_target": "undertow"
           }
@@ -175,8 +175,8 @@
           "target_id": "sealed_well",
           "condition": {
             "attribute": "agility",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 8,
+            "dice_type": "1d6",
             "fail_damage": 4
           }
         },
@@ -185,8 +185,8 @@
           "target_id": "sunken_vault",
           "condition": {
             "attribute": "stamina",
-            "check_value": 16,
-            "dice_type": "2d6",
+            "check_value": 10,
+            "dice_type": "1d6",
             "fail_damage": 6
           }
         }
@@ -201,8 +201,8 @@
           "target_id": "sealed_well",
           "condition": {
             "attribute": "stamina",
-            "check_value": 12,
-            "dice_type": "2d6",
+            "check_value": 6,
+            "dice_type": "1d6",
             "fail_damage": 4
           }
         },
@@ -221,8 +221,8 @@
           "target_id": "escape_ending",
           "condition": {
             "attribute": "stamina",
-            "check_value": 13,
-            "dice_type": "2d6",
+            "check_value": 7,
+            "dice_type": "1d6",
             "fail_damage": 4
           }
         }

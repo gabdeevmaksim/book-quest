@@ -31,19 +31,19 @@ def p_at_least(dt,need):
 def p_pass_fixed(a,cv,dt): return p_at_least(dt,cv-a)
 def max_roll(dt): _,n,s=dice_dist(dt); return n*s
 
-# ── quick check-difficulty table (pass odds at average rolled stat 10.5) ──
-print("="*72); print("  CHECK DIFFICULTY  (pass odds; attr=avg 10/11, +2d6)"); print("="*72)
+# ── quick check-difficulty table (pass odds at average rolled stat 7) ──
+print("="*72); print("  CHECK DIFFICULTY  (pass odds; attr=avg 7, +1d6)"); print("="*72)
 for lid,loc in locs.items():
     for ch in loc.get("choices",[]):
         if "condition" in ch:
-            c=ch["condition"]; cv=c["check_value"]; dt=c.get("dice_type","2d6"); at=c["attribute"]
+            c=ch["condition"]; cv=c["check_value"]; dt=c.get("dice_type","1d6"); at=c["attribute"]
             ib=c.get("item_bonus")
-            p10=p_pass_fixed(10,cv,dt)
-            extra=f"  (+{ib['bonus']} {ib['item']} -> {p_pass_fixed(10+ib['bonus'],cv,dt):.0%})" if ib else ""
+            p10=p_pass_fixed(7,cv,dt)
+            extra=f"  (+{ib['bonus']} {ib['item']} -> {p_pass_fixed(7+ib['bonus'],cv,dt):.0%})" if ib else ""
             print(f"  {lid:18s} {at[:3].upper()} DC{cv:<2} fail-{c.get('fail_damage',2)}  ~{p10:.0%}{extra}  :: {ch['text'][:42]}")
 for lid,loc in locs.items():
     if "monster" in loc:
-        m=loc["monster"]; print(f"  {lid:18s} {m.get('attribute','strength')[:3].upper()} DC{m['strength']:<2} fail-{m['fail_damage']}  ~{p_pass_fixed(10,m['strength'],m.get('dice_type','2d6')):.0%}  :: MONSTER {m['name']}")
+        m=loc["monster"]; print(f"  {lid:18s} {m.get('attribute','strength')[:3].upper()} DC{m['strength']:<2} fail-{m['fail_damage']}  ~{p_pass_fixed(7,m['strength'],m.get('dice_type','1d6')):.0%}  :: MONSTER {m['name']}")
 
 # ── reachability + min-stat (best-case) completability ──
 seen=set(); q=deque([(START,frozenset())]); endings=set(); reach=set(); broken=[]
@@ -66,7 +66,7 @@ print(f"\n  reachability: {len(reach)}/{len(locs)} locs, {len(endings)}/{len(all
 # ── Monte Carlo ──
 def roll(dt): n,s=map(int,dt.split("d")); return sum(random.randint(1,s) for _ in range(n))
 def play(policy,max_steps=400):
-    attr={a:roll("3d6") for a in ATTRS}; mhp=tmpl["health"]; hp=mhp; loc=START
+    attr={a:roll("2d6") for a in ATTRS}; mhp=tmpl["health"]; hp=mhp; loc=START
     inv=[]; looted=set(); defeated=set(); steps=0; mn=hp
     while steps<max_steps:
         steps+=1; L=locs.get(loc)
@@ -88,14 +88,14 @@ def play(policy,max_steps=400):
         if kind=="use": hp=min(mhp,hp+items[ch]["use"]["heal"]); inv.remove(ch)
         elif kind=="fight":
             m=L["monster"]; a=m.get("attribute","strength")
-            if roll(m.get("dice_type","2d6"))+attr[a]>=m["strength"]: defeated.add(loc)
+            if roll(m.get("dice_type","1d6"))+attr[a]>=m["strength"]: defeated.add(loc)
             else: hp-=m.get("fail_damage",4)
         else:
             c=ch
             if "condition" in c:
                 cc=c["condition"]; b=0; ib=cc.get("item_bonus")
                 if ib and ib.get("item") in inv: b=ib.get("bonus",0)
-                if roll(cc.get("dice_type","2d6"))+attr[cc["attribute"]]+b>=cc["check_value"]:
+                if roll(cc.get("dice_type","1d6"))+attr[cc["attribute"]]+b>=cc["check_value"]:
                     loc=c["target_id"]
                     for it in coerce(c.get("gives_item")):
                         if it not in inv: inv.append(it)
@@ -122,12 +122,12 @@ def make_smart():
         fights=[a for a in acts if a[0]=="fight"]; flees=[a for a in acts if a[0]=="flee"]
         if fights:
             m=L["monster"]; a=m.get("attribute","strength")
-            p=p_pass_fixed(attr[a],m["strength"],m.get("dice_type","2d6"))
+            p=p_pass_fixed(attr[a],m["strength"],m.get("dice_type","1d6"))
             if p<0.5 or hp<=m.get("fail_damage",4):
                 cand=[]
                 for f in flees:
                     c=f[1]; cc=c.get("condition")
-                    fp=p_pass_fixed(attr[cc["attribute"]],cc["check_value"],cc.get("dice_type","2d6")) if cc else 1.0
+                    fp=p_pass_fixed(attr[cc["attribute"]],cc["check_value"],cc.get("dice_type","1d6")) if cc else 1.0
                     cand.append((fp,f))
                 if cand: return max(cand,key=lambda x:x[0])[1]
             return fights[0]
@@ -139,7 +139,7 @@ def make_smart():
             else:
                 cc=c["condition"]; b=0; ib=cc.get("item_bonus")
                 if ib and ib.get("item") in inv: b=ib.get("bonus",0)
-                base=p_pass_fixed(attr[cc["attribute"]]+b,cc["check_value"],cc.get("dice_type","2d6"))
+                base=p_pass_fixed(attr[cc["attribute"]]+b,cc["check_value"],cc.get("dice_type","1d6"))
             return base - 0.25*vis.get(c.get("target_id"),0) + random.random()*1e-3
         return max(acts,key=score)
     return pol
@@ -167,8 +167,9 @@ def make_heroic():
         return min(choices,key=score)
     return pol
 
-N=20000
-print("\n"+"="*72); print(f"  MONTE CARLO  n={N} per policy  (random stats 3d6, random dice)"); print("="*72)
+import os
+N=int(os.environ.get("QUEST_PLAYTEST_N", 20000))
+print("\n"+"="*72); print(f"  MONTE CARLO  n={N} per policy  (random stats 2d6, random dice)"); print("="*72)
 print("  policy   |  WIN   DEATH  LOOP  STUCK |  avgHP@win  lowestHP@win | endings")
 metrics={}
 for name,mk in [("random ",make_random),("cautious",make_smart),("heroic ",make_heroic)]:

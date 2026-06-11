@@ -49,8 +49,8 @@
           "target_id": "quarterdeck",
           "condition": {
             "attribute": "agility",
-            "check_value": 13,
-            "dice_type": "2d6",
+            "check_value": 6,
+            "dice_type": "1d6",
             "fail_damage": 4
           }
         },
@@ -59,8 +59,8 @@
           "target_id": "cargo_hold",
           "condition": {
             "attribute": "stamina",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 7,
+            "dice_type": "1d6",
             "fail_damage": 4
           }
         }
@@ -79,7 +79,13 @@
         },
         {
           "text": "Return to the main deck",
-          "target_id": "start"
+          "target_id": "start",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 8,
+            "dice_type": "1d6",
+            "fail_damage": 4
+          }
         }
       ]
     },
@@ -88,9 +94,9 @@
       "is_end": false,
       "monster": {
         "name": "Ghost Cook",
-        "strength": 16,
-        "fail_damage": 8,
-        "dice_type": "2d6",
+        "strength": 9,
+        "fail_damage": 10,
+        "dice_type": "1d6",
         "attribute": "strength"
       },
       "choices": [
@@ -104,8 +110,8 @@
           "target_id": "galley_search",
           "condition": {
             "attribute": "agility",
-            "check_value": 13,
-            "dice_type": "2d6",
+            "check_value": 6,
+            "dice_type": "1d6",
             "fail_damage": 4
           }
         },
@@ -163,8 +169,8 @@
           "target_id": "crow_nest",
           "condition": {
             "attribute": "agility",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 5,
             "fail_target": "deck_fall",
             "item_bonus": {
@@ -175,7 +181,13 @@
         },
         {
           "text": "Retreat down to the safety of the Quarterdeck",
-          "target_id": "quarterdeck"
+          "target_id": "quarterdeck",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 8,
+            "dice_type": "1d6",
+            "fail_damage": 4
+          }
         }
       ]
     },
@@ -188,8 +200,8 @@
           "target_id": "cargo_hold",
           "condition": {
             "attribute": "stamina",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 6,
+            "dice_type": "1d6",
             "fail_damage": 5,
             "fail_target": "dead_shattered"
           }
@@ -214,8 +226,8 @@
           "target_id": "quarterdeck",
           "condition": {
             "attribute": "agility",
-            "check_value": 13,
-            "dice_type": "2d6",
+            "check_value": 6,
+            "dice_type": "1d6",
             "fail_damage": 4
           }
         },
@@ -238,7 +250,13 @@
         },
         {
           "text": "Return up to the Main Deck",
-          "target_id": "start"
+          "target_id": "start",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 8,
+            "dice_type": "1d6",
+            "fail_damage": 4
+          }
         }
       ]
     },
@@ -247,9 +265,9 @@
       "is_end": false,
       "monster": {
         "name": "Drowned Sailor",
-        "strength": 16,
-        "fail_damage": 8,
-        "dice_type": "2d6",
+        "strength": 9,
+        "fail_damage": 10,
+        "dice_type": "1d6",
         "attribute": "strength"
       },
       "choices": [
@@ -263,8 +281,8 @@
           "target_id": "flooded_armory",
           "condition": {
             "attribute": "stamina",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 7,
+            "dice_type": "1d6",
             "fail_damage": 4
           }
         },
@@ -272,6 +290,16 @@
           "text": "Examine the glowing hull breach with your lantern",
           "target_id": "captains_quarters_secret",
           "requires_item": "spectral_lantern"
+        },
+        {
+          "text": "Haul yourself up the dripping ladder back to the Cargo Hold",
+          "target_id": "cargo_hold",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 8,
+            "dice_type": "1d6",
+            "fail_damage": 4
+          }
         }
       ]
     },
@@ -284,8 +312,8 @@
           "target_id": "armory_loot",
           "condition": {
             "attribute": "agility",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 8,
+            "dice_type": "1d6",
             "fail_damage": 5,
             "fail_target": "trap_death"
           }
@@ -339,8 +367,8 @@
           "target_id": "captains_quarters",
           "condition": {
             "attribute": "strength",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 8,
+            "dice_type": "1d6",
             "fail_damage": 5,
             "item_bonus": {
               "item": "silver_cutlass",
@@ -350,7 +378,13 @@
         },
         {
           "text": "Return to the Quarterdeck",
-          "target_id": "quarterdeck"
+          "target_id": "quarterdeck",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 8,
+            "dice_type": "1d6",
+            "fail_damage": 4
+          }
         }
       ]
     },
@@ -359,12 +393,17 @@
       "is_end": false,
       "monster": {
         "name": "Ghost Captain Redbeard",
-        "strength": 17,
-        "fail_damage": 9,
-        "dice_type": "2d6",
+        "strength": 9,
+        "fail_damage": 12,
+        "dice_type": "1d6",
         "attribute": "strength"
       },
       "choices": [
+        {
+          "text": "Dive through the shattered stern window down to the escape dinghy",
+          "target_id": "ending_coward",
+          "is_flee": true
+        },
         {
           "text": "Flee back out to the Quarterdeck!",
           "target_id": "quarterdeck",
@@ -385,8 +424,8 @@
           "target_id": "ending_rich",
           "condition": {
             "attribute": "stamina",
-            "check_value": 16,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 8,
             "fail_target": "ending_curse"
           }
@@ -396,8 +435,8 @@
           "target_id": "ending_heroic",
           "condition": {
             "attribute": "agility",
-            "check_value": 16,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 8,
             "fail_target": "ending_curse",
             "item_bonus": {

@@ -76,7 +76,7 @@ def simulate(story):
                     "type":     "monster_missing_strength",
                     "location": loc_id,
                     "message":  f"Monster in '{loc_id}' has no 'strength' (DC) field.",
-                    "fix":      ("monster", "strength", 12),
+                    "fix":      ("monster", "strength", 9),
                 })
             if "fail_damage" not in m:
                 issues.append({

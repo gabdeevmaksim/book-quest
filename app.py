@@ -107,13 +107,13 @@ from story_engine import (  # Streamlit-free core (shared with story_agent.py)
 # ── dice & text helpers ───────────────────────────────────────────────────────
 
 
-def roll_dice(dice_type="2d6"):
+def roll_dice(dice_type="1d6"):
     num, sides = map(int, dice_type.split("d"))
     return sum(random.randint(1, sides) for _ in range(num))
 
 
 @lru_cache(maxsize=None)
-def _dice_sums(dice_type="2d6"):
+def _dice_sums(dice_type="1d6"):
     """All equally-likely totals for a dice expression (e.g. 2d6 -> 36 outcomes)."""
     num, sides = map(int, dice_type.split("d"))
     sums = [0]
@@ -135,7 +135,7 @@ def odds_label(dice_type, check_value, attr_val, bonus=0):
     return f"≈{pct}%"
 
 
-def animate_roll(placeholder, dice_type="2d6"):
+def animate_roll(placeholder, dice_type="1d6"):
     num = int(dice_type.split("d")[0])
     result = roll_dice(dice_type)
     for _ in range(16):
@@ -299,7 +299,7 @@ def resolve_choice(choice, story):
     cond = choice["condition"]
     attr       = cond["attribute"]
     check_val  = cond["check_value"]
-    dice       = cond.get("dice_type", "2d6")
+    dice       = cond.get("dice_type", "1d6")
     fail_dmg   = cond.get("fail_damage", 2)
 
     bonus, bonus_item = _item_bonus(cond)
@@ -330,7 +330,7 @@ def resolve_choice(choice, story):
 
 
 def resolve_combat(monster, loc_id, story):
-    dice     = monster.get("dice_type", "2d6")
+    dice     = monster.get("dice_type", "1d6")
     fail_dmg = monster.get("fail_damage", 4)
     attr     = monster.get("attribute", "strength")
 
@@ -388,7 +388,7 @@ def show_char_creation(story):
         "font-family:\"Special Elite\",Georgia,serif;font-size:1rem;"
         "line-height:1.85;color:#d4c5a9'>"
         "Before your journey begins, fate must decide your strengths. "
-        "Roll <strong>3d6</strong> for each attribute — this is who you are. "
+        "Roll <strong>2d6</strong> for each attribute — this is who you are. "
         "<em>You roll once. Fate is fate.</em>"
         "</div>",
         unsafe_allow_html=True,
@@ -418,7 +418,7 @@ def show_char_creation(story):
                     st.caption(labels[attr])
                     placeholders[attr] = st.empty()
             for attr in attrs:
-                st.session_state.char_rolls[attr] = animate_roll(placeholders[attr], "3d6")
+                st.session_state.char_rolls[attr] = animate_roll(placeholders[attr], "2d6")
             st.rerun()
         else:
             st.info("Click the button above to roll your attributes.")
@@ -834,7 +834,7 @@ def main():
             attr  = cond.get("attribute", "strength")
             dc    = cond.get("check_value", 0)
             fail  = cond.get("fail_damage", 2)
-            dice  = cond.get("dice_type", "2d6")
+            dice  = cond.get("dice_type", "1d6")
             bonus, bonus_item = _item_bonus(cond)
             attr_val = st.session_state.attributes.get(attr, 0)
             odds  = odds_label(dice, dc, attr_val, bonus)
@@ -848,7 +848,7 @@ def main():
             attr    = monster.get("attribute", "strength")
             dc      = monster["strength"]
             fail    = monster.get("fail_damage", 4)
-            dice    = monster.get("dice_type", "2d6")
+            dice    = monster.get("dice_type", "1d6")
             attr_val = st.session_state.attributes.get(attr, 0)
             odds    = odds_label(dice, dc, attr_val)
             label   = (
@@ -884,7 +884,7 @@ def main():
     if "monster" in curr_loc:
         monster = curr_loc["monster"]
         m_attr  = monster.get("attribute", "strength")
-        m_dice  = monster.get("dice_type", "2d6")
+        m_dice  = monster.get("dice_type", "1d6")
         attr_val = st.session_state.attributes.get(m_attr, 0)
         odds = odds_label(m_dice, monster["strength"], attr_val)
         st.error(f"⚔️  **{monster['name']}** blocks your path!")
@@ -908,7 +908,7 @@ def main():
                     fa = st.session_state.attributes.get(cc["attribute"], 0)
                     b, _bi = _item_bonus(cc)
                     lbl += (f"  [{cc['attribute'].upper()} DC {cc['check_value']} · "
-                            f"{odds_label(cc.get('dice_type','2d6'), cc['check_value'], fa, b)}]")
+                            f"{odds_label(cc.get('dice_type','1d6'), cc['check_value'], fa, b)}]")
                 if st.button(lbl, key=f"flee_{c['text']}"):
                     if "condition" in c:
                         st.session_state.pending_choice = c
@@ -951,7 +951,7 @@ def main():
             cond = choice["condition"]
             attr_val = st.session_state.attributes.get(cond["attribute"], 0)
             bonus, bonus_item = _item_bonus(cond)
-            odds = odds_label(cond.get("dice_type", "2d6"), cond["check_value"], attr_val, bonus)
+            odds = odds_label(cond.get("dice_type", "1d6"), cond["check_value"], attr_val, bonus)
             lbl += (
                 f"\n  ↳ {cond['attribute'].upper()} check, "
                 f"DC {cond['check_value']} · {odds}"

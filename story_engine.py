@@ -135,7 +135,9 @@ def load_story_file(path):
 
 
 def slugify(s):
-    s = re.sub(r"[^a-z0-9]+", "_", (s or "").lower()).strip("_")
+    # \w keeps Unicode letters/digits, so non-Latin titles (e.g. Russian) get real slugs
+    # instead of collapsing to the "story" fallback
+    s = re.sub(r"[^\w]+", "_", (s or "").lower()).strip("_")
     return s[:40] or "story"
 
 

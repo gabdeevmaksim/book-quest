@@ -56,8 +56,8 @@
           "target_id": "press_conference",
           "condition": {
             "attribute": "stamina",
-            "check_value": 12,
-            "dice_type": "2d6",
+            "check_value": 5,
+            "dice_type": "1d6",
             "fail_damage": 3,
             "fail_target": "media_doubt"
           }
@@ -72,8 +72,8 @@
           "target_id": "peak_conditioning",
           "condition": {
             "attribute": "stamina",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 7,
+            "dice_type": "1d6",
             "fail_damage": 4,
             "fail_target": "burnout"
           }
@@ -83,8 +83,8 @@
           "target_id": "technical_mastery",
           "condition": {
             "attribute": "agility",
-            "check_value": 13,
-            "dice_type": "2d6",
+            "check_value": 6,
+            "dice_type": "1d6",
             "fail_damage": 3,
             "fail_target": "frustration"
           }
@@ -106,8 +106,8 @@
           "target_id": "strategic_advantage",
           "condition": {
             "attribute": "strength",
-            "check_value": 13,
-            "dice_type": "2d6",
+            "check_value": 6,
+            "dice_type": "1d6",
             "fail_damage": 4,
             "fail_target": "confusion"
           }
@@ -131,8 +131,8 @@
           "target_id": "statement_impact",
           "condition": {
             "attribute": "strength",
-            "check_value": 13,
-            "dice_type": "2d6",
+            "check_value": 6,
+            "dice_type": "1d6",
             "fail_damage": 4,
             "fail_target": "media_scandal"
           }
@@ -142,8 +142,8 @@
           "target_id": "team_focus",
           "condition": {
             "attribute": "agility",
-            "check_value": 12,
-            "dice_type": "2d6",
+            "check_value": 5,
+            "dice_type": "1d6",
             "fail_damage": 3,
             "fail_target": "media_doubt"
           }
@@ -251,9 +251,9 @@
       "description": "The first league match is a gritty affair. You face a determined opponent, testing your resolve from the outset.",
       "monster": {
         "name": "Gritty Serie A Defender",
-        "strength": 14,
+        "strength": 7,
         "fail_damage": 4,
-        "dice_type": "2d6",
+        "dice_type": "1d6",
         "attribute": "strength"
       },
       "choices": [
@@ -267,8 +267,8 @@
           "is_flee": true,
           "condition": {
             "attribute": "agility",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 8,
+            "dice_type": "1d6",
             "fail_damage": 3,
             "fail_target": "league_draw",
             "item_bonus": {
@@ -293,9 +293,9 @@
       "description": "The second match. The chemistry between Edik and the squad is starting to show, but the opponent's counter-attack is lethal.",
       "monster": {
         "name": "Dynamic Counter-Attacking Squad",
-        "strength": 15,
+        "strength": 8,
         "fail_damage": 5,
-        "dice_type": "2d6",
+        "dice_type": "1d6",
         "attribute": "agility"
       },
       "choices": [
@@ -309,8 +309,8 @@
           "is_flee": true,
           "condition": {
             "attribute": "stamina",
-            "check_value": 16,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 4,
             "fail_target": "league_loss",
             "item_bonus": {
@@ -325,9 +325,9 @@
       "description": "The crucial Champions League playoff qualifier. If you lose, the European dream dies here.",
       "monster": {
         "name": "Resilient European Challenger",
-        "strength": 15,
+        "strength": 8,
         "fail_damage": 5,
-        "dice_type": "2d6",
+        "dice_type": "1d6",
         "attribute": "strength"
       },
       "choices": [
@@ -341,8 +341,8 @@
           "is_flee": true,
           "condition": {
             "attribute": "agility",
-            "check_value": 16,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 4,
             "fail_target": "qualifier_loss",
             "item_bonus": {
@@ -383,9 +383,9 @@
       "description": "Under the bright floodlights, you face a formidable Spanish side.",
       "monster": {
         "name": "Spanish Possession Giants",
-        "strength": 16,
+        "strength": 9,
         "fail_damage": 5,
-        "dice_type": "2d6",
+        "dice_type": "1d6",
         "attribute": "agility"
       },
       "choices": [
@@ -399,8 +399,8 @@
           "is_flee": true,
           "condition": {
             "attribute": "strength",
-            "check_value": 17,
-            "dice_type": "2d6",
+            "check_value": 10,
+            "dice_type": "1d6",
             "fail_damage": 4,
             "fail_target": "group_stage_draw",
             "item_bonus": {
@@ -425,9 +425,9 @@
       "description": "The final, must-win group match against a physical German club.",
       "monster": {
         "name": "German Heavy Metal Side",
-        "strength": 16,
+        "strength": 9,
         "fail_damage": 6,
-        "dice_type": "2d6",
+        "dice_type": "1d6",
         "attribute": "strength"
       },
       "choices": [
@@ -441,8 +441,8 @@
           "is_flee": true,
           "condition": {
             "attribute": "stamina",
-            "check_value": 17,
-            "dice_type": "2d6",
+            "check_value": 10,
+            "dice_type": "1d6",
             "fail_damage": 5,
             "fail_target": "group_stage_loss",
             "item_bonus": {
@@ -475,9 +475,9 @@
       "description": "An intense battle against an elite English club. Every tackle is bone-shattering.",
       "monster": {
         "name": "Elite English Champions",
-        "strength": 17,
+        "strength": 10,
         "fail_damage": 6,
-        "dice_type": "2d6",
+        "dice_type": "1d6",
         "attribute": "stamina"
       },
       "choices": [
@@ -491,8 +491,8 @@
           "is_flee": true,
           "condition": {
             "attribute": "agility",
-            "check_value": 18,
-            "dice_type": "2d6",
+            "check_value": 11,
+            "dice_type": "1d6",
             "fail_damage": 5,
             "fail_target": "eliminated_in_semi_finals",
             "item_bonus": {
@@ -507,9 +507,9 @@
       "description": "The Grand Finale. The world watches as Edik and Del Piero stand on the touchline, urging you forward.",
       "monster": {
         "name": "The Ultimate European Superclub",
-        "strength": 18,
+        "strength": 11,
         "fail_damage": 7,
-        "dice_type": "2d6",
+        "dice_type": "1d6",
         "attribute": "strength"
       },
       "choices": [
@@ -518,8 +518,8 @@
           "target_id": "win",
           "condition": {
             "attribute": "strength",
-            "check_value": 18,
-            "dice_type": "2d6",
+            "check_value": 11,
+            "dice_type": "1d6",
             "fail_damage": 7,
             "fail_target": "final_loss",
             "item_bonus": {
@@ -533,8 +533,8 @@
           "target_id": "win",
           "condition": {
             "attribute": "agility",
-            "check_value": 18,
-            "dice_type": "2d6",
+            "check_value": 11,
+            "dice_type": "1d6",
             "fail_damage": 7,
             "fail_target": "final_loss",
             "item_bonus": {
@@ -549,8 +549,8 @@
           "is_flee": true,
           "condition": {
             "attribute": "strength",
-            "check_value": 19,
-            "dice_type": "2d6",
+            "check_value": 12,
+            "dice_type": "1d6",
             "fail_damage": 6,
             "fail_target": "final_loss",
             "item_bonus": {

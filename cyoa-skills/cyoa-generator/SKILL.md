@@ -92,8 +92,8 @@ Never hand back a story that has not passed steps 2, 3 and 4.
           "target_id": "vault",
           "condition": {                 // triggers a dice roll: roll(dice)+attribute(+bonus) >= check_value
             "attribute": "agility",      // must be strength | agility | stamina
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 10,
+            "dice_type": "1d6",
             "fail_damage": 5,            // HP lost on failure
             "fail_target": "pit",        // OPTIONAL: where failure sends you (omit = stay & retry)
             "item_bonus": { "item": "charm", "bonus": 3 }   // OPTIONAL: +bonus if item held
@@ -106,9 +106,9 @@ Never hand back a story that has not passed steps 2, 3 and 4.
       ],
       "monster": {                       // OPTIONAL: blocks the location until defeated
         "name": "Cellar Ghoul",
-        "strength": 15,                  // the DC: player needs roll(dice)+attribute >= this
+        "strength": 10,                  // the DC: player needs roll(dice)+attribute >= this
         "fail_damage": 6,                // HP lost per failed attempt
-        "dice_type": "2d6",
+        "dice_type": "1d6",
         "attribute": "strength"          // which stat the player fights with (default strength)
       }
     },
@@ -131,17 +131,21 @@ Never hand back a story that has not passed steps 2, 3 and 4.
 
 ## Difficulty presets (derived from playtested tuning)
 
-Dice math: a stat is rolled as **3d6** (range 3–18, avg ~10.5); checks add **2d6** (avg 7),
-so an average total is ~17.5. Pass odds at attribute **10** (players usually route to a
+Dice math: a stat is rolled as **2d6** (range 2–12, avg 7); checks add **1d6** (avg 3.5),
+so an average total is ~10.5. Pass odds at attribute **7** (players usually route to a
 stronger stat, so real odds run a little higher):
 
-`DC 12→100% · 13→97% · 14→92% · 15→83% · 16→72% · 17→58% · 18→42% · 19→28%`
+`DC 8→100% · 9→83% · 10→67% · 11→50% · 12→33% · 13→17% · 14+→0%`
+
+DC 13–14 is effectively **impossible without an item bonus** — use that deliberately: a +2/+3
+item turns a hopeless check into a fair one (DC 13 with +3 → 67%). This is what makes items
+worth hunting; gate the hardest beats behind preparation, never behind pure luck.
 
 | Difficulty | `health` | Travel-check DC | Climactic DC | fail_damage (minor / climactic) | Monster STR-DC / fail | Healing & safety valves |
 |---|---|---|---|---|---|---|
-| **easy**   | 26–30 | 10–12 | 12–14 | 2 / 3   | 11–13 / 3–4 | generous heal items; many no-check options |
-| **normal** | 16–20 | 12–14 | 14–16 | 3–4 / 5–6 | 14–16 / 5–7 | one heal item per long route; add retreats |
-| **hard**   | 12–14 | 13–15 | 16–18 | 4–5 / 7–9 | 16–18 / 8–10 | scarce heals; few safe options |
+| **easy**   | 26–30 | 6–8  | 8–9   | 2 / 3     | 7–9 / 3–4   | generous heal items; many no-check options |
+| **normal** | 16–20 | 8–9  | 10–11 | 3–4 / 5–6 | 9–11 / 5–7  | one heal item per long route; add retreats |
+| **hard**   | 12–14 | 9–10 | 11–13 | 4–5 / 7–9 | 11–13 / 8–10 | scarce heals; few safe options |
 
 Target outcomes `playtest.py` checks for: **easy** ≈ cautious win ≥93%, heroic death <12%;
 **normal** ≈ cautious win 85–99%, heroic death 12–35%; **hard** ≈ cautious win 60–88%,
@@ -157,9 +161,9 @@ heroic death ≥30% (still beatable).
   back it with `heals` or an item `use:{heal:N}`. Never imply healing without the mechanic.
 - **No free-retry**: never use `fail_damage: 0` together with no `fail_target` — that's a
   consequence-free infinite retry. Give it a cost or a `fail_target`.
-- **No hard locks**: any check or monster a minimum-stat (3) hero could never pass
-  (`3 + max(dice) < DC`) MUST have an alternative route or a flee. Bosses always get a
-  flee and/or an alternate-attribute route.
+- **No hard locks**: any check or monster a minimum-stat (2) hero could never pass even with
+  every available item bonus (`2 + max(dice) + bonuses < DC`) MUST have an alternative route
+  or a flee. Bosses always get a flee and/or an alternate-attribute route.
 - **Safety valves**: from any committed multi-room gauntlet, include a retreat choice so a
   weak hero can back out instead of dying with no options.
 - **Obtainable gates**: an item named in `requires_item` must be grantable (loot or

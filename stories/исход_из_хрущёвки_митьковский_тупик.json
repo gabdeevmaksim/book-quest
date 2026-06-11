@@ -56,8 +56,8 @@
           "gives_item": "door_key",
           "condition": {
             "attribute": "agility",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 5
           }
         }
@@ -73,8 +73,8 @@
           "gives_item": "telnyashka",
           "condition": {
             "attribute": "agility",
-            "check_value": 13,
-            "dice_type": "2d6",
+            "check_value": 7,
+            "dice_type": "1d6",
             "fail_damage": 3
           }
         },
@@ -88,8 +88,8 @@
           "target_id": "stairwell_4th_floor",
           "condition": {
             "attribute": "strength",
-            "check_value": 16,
-            "dice_type": "2d6",
+            "check_value": 10,
+            "dice_type": "1d6",
             "fail_damage": 5
           }
         },
@@ -113,8 +113,8 @@
           "target_id": "stairwell_4th_floor",
           "condition": {
             "attribute": "strength",
-            "check_value": 16,
-            "dice_type": "2d6",
+            "check_value": 10,
+            "dice_type": "1d6",
             "fail_damage": 5
           }
         }
@@ -129,8 +129,8 @@
           "target_id": "stairwell_2nd_floor",
           "condition": {
             "attribute": "agility",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 6,
             "fail_target": "fight_vasya"
           }
@@ -140,8 +140,8 @@
           "target_id": "stairwell_2nd_floor",
           "condition": {
             "attribute": "stamina",
-            "check_value": 16,
-            "dice_type": "2d6",
+            "check_value": 10,
+            "dice_type": "1d6",
             "fail_damage": 6,
             "fail_target": "fight_vasya",
             "item_bonus": {
@@ -161,9 +161,9 @@
       "is_end": false,
       "monster": {
         "name": "Разъяренный дядя Вася",
-        "strength": 17,
+        "strength": 11,
         "fail_damage": 9,
-        "dice_type": "2d6",
+        "dice_type": "1d6",
         "attribute": "strength"
       },
       "choices": [
@@ -187,8 +187,8 @@
           "target_id": "courtyard",
           "condition": {
             "attribute": "agility",
-            "check_value": 16,
-            "dice_type": "2d6",
+            "check_value": 10,
+            "dice_type": "1d6",
             "fail_damage": 7,
             "fail_target": "ending_hypothermia"
           }
@@ -208,8 +208,8 @@
           "target_id": "entrance_lobby",
           "condition": {
             "attribute": "stamina",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 5,
             "item_bonus": {
               "item": "telnyashka",
@@ -223,8 +223,8 @@
           "gives_item": "crowbar",
           "condition": {
             "attribute": "strength",
-            "check_value": 16,
-            "dice_type": "2d6",
+            "check_value": 10,
+            "dice_type": "1d6",
             "fail_damage": 5
           }
         },
@@ -243,8 +243,8 @@
           "target_id": "courtyard",
           "condition": {
             "attribute": "stamina",
-            "check_value": 16,
-            "dice_type": "2d6",
+            "check_value": 10,
+            "dice_type": "1d6",
             "fail_damage": 6,
             "item_bonus": {
               "item": "telnyashka",
@@ -257,8 +257,8 @@
           "target_id": "courtyard",
           "condition": {
             "attribute": "strength",
-            "check_value": 17,
-            "dice_type": "2d6",
+            "check_value": 11,
+            "dice_type": "1d6",
             "fail_damage": 6,
             "item_bonus": {
               "item": "crowbar",
@@ -281,8 +281,8 @@
           "target_id": "ending_victory",
           "condition": {
             "attribute": "agility",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 7,
             "fail_target": "ending_hypothermia"
           }
@@ -292,8 +292,8 @@
           "target_id": "ending_victory",
           "condition": {
             "attribute": "stamina",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 5,
             "fail_target": "ending_hypothermia",
             "item_bonus": {

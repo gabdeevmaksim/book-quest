@@ -49,8 +49,8 @@
           "target_id": "merchant_stash",
           "condition": {
             "attribute": "strength",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 8,
+            "dice_type": "1d6",
             "fail_damage": 3
           }
         },
@@ -114,8 +114,8 @@
           "target_id": "salt_flats_deep",
           "condition": {
             "attribute": "stamina",
-            "check_value": 13,
-            "dice_type": "2d6",
+            "check_value": 7,
+            "dice_type": "1d6",
             "fail_damage": 4,
             "item_bonus": {
               "item": "canteen",
@@ -128,8 +128,8 @@
           "target_id": "nomad_territory",
           "condition": {
             "attribute": "stamina",
-            "check_value": 13,
-            "dice_type": "2d6",
+            "check_value": 7,
+            "dice_type": "1d6",
             "fail_damage": 4,
             "item_bonus": {
               "item": "canteen",
@@ -152,8 +152,8 @@
           "target_id": "nomad_territory",
           "condition": {
             "attribute": "agility",
-            "check_value": 13,
-            "dice_type": "2d6",
+            "check_value": 7,
+            "dice_type": "1d6",
             "fail_damage": 6,
             "fail_target": "dust_blind"
           }
@@ -163,8 +163,8 @@
           "target_id": "nomad_territory",
           "condition": {
             "attribute": "stamina",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 8,
+            "dice_type": "1d6",
             "fail_damage": 7,
             "fail_target": "dust_blind",
             "item_bonus": {
@@ -184,8 +184,8 @@
           "target_id": "nomad_territory",
           "condition": {
             "attribute": "stamina",
-            "check_value": 12,
-            "dice_type": "2d6",
+            "check_value": 6,
+            "dice_type": "1d6",
             "fail_damage": 4,
             "item_bonus": {
               "item": "canteen",
@@ -212,8 +212,8 @@
           "target_id": "nomad_camp",
           "condition": {
             "attribute": "strength",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 8,
+            "dice_type": "1d6",
             "fail_damage": 5,
             "fail_target": "driven_out"
           }
@@ -223,8 +223,8 @@
           "target_id": "desert_oasis",
           "condition": {
             "attribute": "agility",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 3,
             "fail_target": "nomad_camp"
           }
@@ -244,8 +244,8 @@
           "target_id": "desert_oasis",
           "condition": {
             "attribute": "agility",
-            "check_value": 12,
-            "dice_type": "2d6",
+            "check_value": 6,
+            "dice_type": "1d6",
             "fail_damage": 3
           }
         }
@@ -317,8 +317,8 @@
           "target_id": "city_sewers",
           "condition": {
             "attribute": "agility",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 8,
+            "dice_type": "1d6",
             "fail_damage": 4,
             "fail_target": "city_outskirts"
           }
@@ -344,9 +344,9 @@
       "is_end": false,
       "monster": {
         "name": "Scav-Hound Pack",
-        "strength": 14,
+        "strength": 8,
         "fail_damage": 6,
-        "dice_type": "2d6",
+        "dice_type": "1d6",
         "attribute": "strength"
       },
       "choices": [
@@ -356,8 +356,8 @@
           "is_flee": true,
           "condition": {
             "attribute": "agility",
-            "check_value": 12,
-            "dice_type": "2d6",
+            "check_value": 6,
+            "dice_type": "1d6",
             "fail_damage": 3
           }
         },
@@ -376,8 +376,8 @@
           "target_id": "hidden_bunker",
           "condition": {
             "attribute": "agility",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 8,
+            "dice_type": "1d6",
             "fail_damage": 2
           }
         },
@@ -386,8 +386,8 @@
           "target_id": "hidden_bunker",
           "condition": {
             "attribute": "strength",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 3
           }
         },
@@ -456,8 +456,8 @@
           "target_id": "radio_tower_summit",
           "condition": {
             "attribute": "stamina",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 6,
             "fail_target": "city_gate"
           }
@@ -504,8 +504,8 @@
           "target_id": "hospital_ward",
           "condition": {
             "attribute": "agility",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 5,
             "fail_target": "hospital_entrance"
           }
@@ -515,8 +515,8 @@
           "target_id": "hospital_ward",
           "condition": {
             "attribute": "strength",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 8,
+            "dice_type": "1d6",
             "fail_damage": 6,
             "fail_target": "hospital_entrance"
           }
@@ -546,8 +546,8 @@
           "target_id": "hospital_vault",
           "condition": {
             "attribute": "strength",
-            "check_value": 16,
-            "dice_type": "2d6",
+            "check_value": 10,
+            "dice_type": "1d6",
             "fail_damage": 5
           }
         },
@@ -556,8 +556,8 @@
           "target_id": "hospital_vault",
           "condition": {
             "attribute": "agility",
-            "check_value": 14,
-            "dice_type": "2d6",
+            "check_value": 8,
+            "dice_type": "1d6",
             "fail_damage": 4
           }
         },
@@ -582,9 +582,9 @@
       "is_end": false,
       "monster": {
         "name": "The Crank",
-        "strength": 16,
+        "strength": 10,
         "fail_damage": 7,
-        "dice_type": "2d6",
+        "dice_type": "1d6",
         "attribute": "strength"
       },
       "choices": [
@@ -599,8 +599,8 @@
           "is_flee": true,
           "condition": {
             "attribute": "agility",
-            "check_value": 15,
-            "dice_type": "2d6",
+            "check_value": 9,
+            "dice_type": "1d6",
             "fail_damage": 7
           }
         },

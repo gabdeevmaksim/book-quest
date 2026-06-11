@@ -127,6 +127,11 @@ an existing story without generating.
   only the Fight button and `is_flee` choices show; non-flee choices appear post-defeat.
 - Attribute checks: `dice_roll + attribute (+ item_bonus) >= check_value`; failure costs
   `condition.fail_damage` (default 2). Combat: `dice_roll + attribute >= monster.strength`.
+- **Dice system**: attributes are rolled **2d6** at character creation (range 2–12, avg 7);
+  checks and combat roll **1d6** by default (engine default when `dice_type` is omitted).
+  DC 13–14 is unreachable without an item bonus — items are deliberately the lever that
+  turns impossible checks into fair ones. Difficulty presets live in the cyoa-generator spec.
+  `QUEST_PLAYTEST_N` overrides the Monte-Carlo run count (default 20000) for fast tuning.
 - Optional choice fields (`condition`, `requires_item`, `gives_item`, `heals`, etc.) all have
   safe defaults, so older stories without them still run.
 
