@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quest Book — a free choose-your-own-adventure RPG</title>
+<meta name="description" content="Quest Book is a free, browser-based choose-your-own-adventure RPG. Branching stories, dice rolls, and AI-made quests in any language and at your reading level.">
+<!-- Open Graph (nice link previews when shared) -->
+<meta property="og:title" content="Quest Book — a free choose-your-own-adventure RPG">
+<meta property="og:description" content="Branching stories, dice rolls, monsters and loot — and you can conjure a brand-new adventure on any theme, in your language, at your level.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f0d0a; --panel:#141008; --panel2:#0f0c06; --line:#2a2010;
+    --amber:#d4a843; --amber-soft:#b89a6a; --parch:#c8b49a; --muted:#6a5a42;
+    --serif:'Special Elite',Georgia,serif; --mono:'Share Tech Mono',monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--parch);font-family:var(--mono);
+       line-height:1.7;-webkit-font-smoothing:antialiased}
+  a{color:var(--amber)}
+  .wrap{max-width:980px;margin:0 auto;padding:0 1.2rem}
+
+  /* hero */
+  header{text-align:center;padding:4rem 1rem 2.5rem;border-bottom:1px solid var(--line);
+         background:radial-gradient(ellipse at top,#16120a 0%,var(--bg) 70%)}
+  .die{font-size:3rem;color:var(--amber);filter:drop-shadow(0 0 14px rgba(212,168,67,.35))}
+  h1{font-family:var(--serif);color:var(--amber);font-size:2.8rem;letter-spacing:4px;
+     margin:.4rem 0 .2rem}
+  .tag{font-family:var(--serif);color:var(--amber-soft);font-size:1.15rem;margin:.2rem 0 .2rem}
+  .sub{color:var(--muted);font-size:.92rem;max-width:620px;margin:.6rem auto 1.6rem}
+  .cta{display:flex;gap:.8rem;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-block;font-family:var(--mono);font-size:.95rem;text-decoration:none;
+       padding:.8rem 1.5rem;border-radius:4px;border:1px solid var(--line);transition:all .12s ease}
+  .btn-primary{background:#1c1608;color:var(--amber);border-color:#3a2e14}
+  .btn-primary:hover{background:#251d0b;border-color:var(--amber);color:#f0d890}
+  .btn-kofi{background:#13212e;color:#7fc7e8;border-color:#28506a}
+  .btn-kofi:hover{background:#18293a;border-color:#7fc7e8;color:#bfe6f7}
+
+  section{padding:2.6rem 0;border-bottom:1px solid var(--line)}
+  h2{font-family:var(--serif);color:var(--amber-soft);font-size:1.4rem;letter-spacing:1px;
+     text-align:center;margin:0 0 1.4rem}
+
+  /* feature grid */
+  .feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem}
+  .feat{background:linear-gradient(135deg,var(--panel),var(--panel2));border:1px solid var(--line);
+        border-left:3px solid #8b6914;border-radius:0 6px 6px 0;padding:1.1rem 1.2rem}
+  .feat .ico{font-size:1.4rem}
+  .feat h3{font-family:var(--serif);color:var(--amber);font-size:1.02rem;margin:.4rem 0 .3rem}
+  .feat p{color:#a99878;font-size:.86rem;margin:0}
+
+  /* story cards */
+  .stories{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem}
+  .card{background:linear-gradient(135deg,var(--panel),var(--panel2));border:1px solid var(--line);
+        border-left:3px solid #8b6914;border-radius:0 6px 6px 0;padding:1rem 1.15rem}
+  .card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .card .name{font-family:var(--serif);color:var(--amber);font-size:1.05rem;line-height:1.3}
+  .card .theme{color:var(--muted);font-size:.74rem;margin:.3rem 0 .55rem}
+  .card .goal{color:#a99878;font-size:.85rem}
+  .badge{font-size:.66rem;letter-spacing:1px;border-radius:10px;padding:1px 9px;white-space:nowrap;
+         font-family:var(--mono)}
+  .easy{background:#1f3a1f;color:#7fd17f;border:1px solid #7fd17f55}
+  .normal{background:#3a2e10;color:#e8b94a;border:1px solid #e8b94a55}
+  .hard{background:#3a1414;color:#e07a7a;border:1px solid #e07a7a55}
+  .lang-note{text-align:center;color:var(--muted);font-size:.84rem;margin-top:1.2rem}
+
+  /* support */
+  .support{text-align:center}
+  .support p{max-width:640px;margin:.4rem auto 1.4rem;color:#a99878;font-size:.92rem}
+
+  footer{padding:2rem 1rem;text-align:center;color:var(--muted);font-size:.8rem}
+  footer a{color:var(--amber-soft);text-decoration:none}
+  @media(max-width:560px){h1{font-size:2.1rem}}
+</style>
+</head>
+<body>
+
+<!--
+  ============================================================
+  EDIT THESE TWO LINKS:
+   • PLAY  → your live app. Currently the DigitalOcean droplet IP;
+             swap for a domain once you have one.
+   • KO-FI → your donation page.
+  ============================================================
+-->
+<header>
+  <div class="wrap">
+    <div class="die">🎲</div>
+    <h1>QUEST BOOK</h1>
+    <div class="tag">Your choices. Your dice. Your story.</div>
+    <p class="sub">A free, browser-based choose-your-own-adventure RPG. Every tale branches on
+      what you decide and the roll of the dice — with stats, monsters, and loot along the way.
+      And you can conjure a brand-new adventure on any theme, in your language, at your level.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="http://134.122.120.45" target="_blank" rel="noopener">▶  Play now — it's free</a>
+      <a class="btn btn-kofi" href="https://ko-fi.com/dedulek" target="_blank" rel="noopener">☕  Support on Ko-fi</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>What awaits you</h2>
+    <div class="feats">
+      <div class="feat"><div class="ico">📖</div><h3>Branching adventures</h3>
+        <p>Hand-crafted and AI-made stories where every choice forks the path to a different ending.</p></div>
+      <div class="feat"><div class="ico">🎲</div><h3>Real RPG mechanics</h3>
+        <p>Roll your hero's stats, beat dice checks, fight monsters, find items, and heal your wounds.</p></div>
+      <div class="feat"><div class="ico">✨</div><h3>Make your own world</h3>
+        <p>Type a theme — pirate ghost ship, Norse myth, haunted Mars — and the engine writes a full quest.</p></div>
+      <div class="feat"><div class="ico">🗣️</div><h3>Any language, any level</h3>
+        <p>Play in your language at a CEFR level from A1 to C2 — a fun way to practise while you adventure.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>A few quests from the library</h2>
+    <div class="stories">
+      <div class="card">
+        <div class="top"><span class="name">The Whispering Catacombs</span><span class="badge easy">EASY</span></div>
+        <div class="theme">🌍 Gothic dungeon crawl · 12 locations</div>
+        <div class="goal">Descend into the catacombs and escape with the Saint's Relic — or at least escape with your life.</div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="name">Silent Run: The Hyperion Drift</span><span class="badge normal">NORMAL</span></div>
+        <div class="theme">🌍 Derelict generation ship · 15 locations</div>
+        <div class="goal">Reach the heart of the dead colony ship Hyperion and get out alive.</div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="name">The Banshee's Wail</span><span class="badge hard">HARD</span></div>
+        <div class="theme">🌍 Pirate ghost ship · 22 locations</div>
+        <div class="goal">Infiltrate the cursed spectral galleon, defeat the undead captain, and break the curse — or flee with your life.</div>
+      </div>
+    </div>
+    <p class="lang-note">…and more, from a wasteland salt-flat run to a Russian khrushchyovka escape (Русский, C2).</p>
+  </div>
+</section>
+
+<section class="support">
+  <div class="wrap">
+    <h2>Keep the quests coming</h2>
+    <p>Quest Book is a passion project, free for everyone to play. Donations go straight to the
+      AI and server costs that let anyone summon a new adventure — every coffee buys more quests.</p>
+    <a class="btn btn-kofi" href="https://ko-fi.com/dedulek" target="_blank" rel="noopener">☕  Support Quest Book on Ko-fi</a>
+  </div>
+</section>
+
+<footer>
+  Made by Maks · <a href="https://github.com/gabdeevmaksim/book-quest" target="_blank" rel="noopener">Source on GitHub</a> ·
+  source-available, noncommercial.
+</footer>
+
+</body>
+</html>

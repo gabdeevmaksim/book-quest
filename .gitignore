@@ -12,6 +12,9 @@ env/
 # Generated stories (user content, ephemeral on cloud)
 stories/*.json
 
+# Cost / usage ledger (monthly spend tracking)
+state/
+
 # Claude Code internal
 .claude/
 

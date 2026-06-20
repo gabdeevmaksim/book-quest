@@ -115,6 +115,13 @@ def main():
         max_attempts=args.max_attempts, keep_best=args.save_draft, log=lambda *a: print(*a),
         language=args.lang, language_level=args.level)
 
+    if summary and summary.get("cost_usd") is not None:
+        E.record_spend(summary.get("cost_usd", 0.0), summary.get("model_used", ""),
+                       summary.get("tokens_in", 0), summary.get("tokens_out", 0))
+        print(f"\n  cost ≈ ${summary['cost_usd']:.4f}  ({summary.get('attempts', '?')} call(s), "
+              f"{summary.get('tokens_in', 0)}+{summary.get('tokens_out', 0)} tok, "
+              f"model {summary.get('model_used', '?')})")
+
     print()
     if path and E.s3_enabled():
         s3_ok, s3_detail = E.push_story_to_s3(path)

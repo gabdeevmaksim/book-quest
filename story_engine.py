@@ -65,6 +65,87 @@ DEFAULT_MODEL_CHAINS = {
 PROVIDER_LABEL = {"google": "Google (Gemini)", "anthropic": "Anthropic (Claude)"}
 PROVIDER_PKG   = {"google": "google-genai", "anthropic": "anthropic"}
 
+# ── cost tracking & monthly budget ──────────────────────────────────────────────
+# Paid API prices in USD per 1,000,000 tokens (input, output) — current as of June 2026.
+# EDIT THIS TABLE if prices change or you add models. Free-tier Google models are listed at
+# 0.0 so they never count against the paid budget — they're the backup used once the cap hits.
+MODEL_PRICING = {
+    "claude-opus-4-8":           (5.0, 25.0),
+    "claude-sonnet-4-6":         (3.0, 15.0),
+    "claude-haiku-4-5-20251001": (1.0,  5.0),
+    "gemini-3.5-flash":          (1.5,  9.0),
+    "gemini-3.1-pro":            (2.0, 12.0),
+    "gemini-2.5-flash":          (0.0,  0.0),   # free-tier backup
+    "gemini-2.5-flash-lite":     (0.0,  0.0),   # free-tier backup
+}
+
+
+def estimate_cost(model, input_tokens, output_tokens):
+    """Estimated USD cost of one call. Unknown models are treated as free (0.0)."""
+    pin, pout = MODEL_PRICING.get(model, (0.0, 0.0))
+    return (int(input_tokens or 0) / 1_000_000) * pin + (int(output_tokens or 0) / 1_000_000) * pout
+
+
+# Monthly spend cap (USD). 0 / unset (default) = unlimited, feature OFF. When this month's
+# paid spend reaches the cap, generation falls back to the free Google chain below.
+def monthly_budget():
+    try:
+        return float(os.environ.get("QUEST_MONTHLY_BUDGET_USD", "0") or 0)
+    except ValueError:
+        return 0.0
+
+
+def free_fallback_models():
+    """The free Google model chain used once the monthly paid budget is exhausted."""
+    chain = os.environ.get("QUEST_FREE_FALLBACK_MODELS", "gemini-2.5-flash,gemini-2.5-flash-lite")
+    return [m.strip() for m in chain.split(",") if m.strip()]
+
+
+USAGE_FILE = os.environ.get("QUEST_USAGE_FILE", os.path.join("state", "usage.json"))
+
+
+def _load_usage():
+    try:
+        with open(USAGE_FILE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _month_key(when=None):
+    return time.strftime("%Y-%m", time.gmtime(when))
+
+
+def month_spend(when=None):
+    """USD spent so far in the given (default current) calendar month."""
+    return float(_load_usage().get(_month_key(when), {}).get("cost_usd", 0.0))
+
+
+def record_spend(cost, model="", tokens_in=0, tokens_out=0, when=None):
+    """Add one generation's cost to the month's running total. Never raises — cost
+    tracking must not be able to break story generation."""
+    if not cost:
+        cost = 0.0
+    try:
+        data = _load_usage()
+        mk = _month_key(when)
+        m = data.setdefault(mk, {"cost_usd": 0.0, "stories": 0, "tokens_in": 0, "tokens_out": 0})
+        m["cost_usd"]   = round(m.get("cost_usd", 0.0) + float(cost), 6)
+        m["stories"]    = m.get("stories", 0) + 1
+        m["tokens_in"]  = m.get("tokens_in", 0) + int(tokens_in or 0)
+        m["tokens_out"] = m.get("tokens_out", 0) + int(tokens_out or 0)
+        os.makedirs(os.path.dirname(USAGE_FILE) or ".", exist_ok=True)
+        with open(USAGE_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
+
+def budget_exceeded():
+    """True only if a cap is set (>0) AND this month's spend has reached it."""
+    cap = monthly_budget()
+    return cap > 0 and month_spend() >= cap
+
 
 def gen_provider():
     """Pick the model provider from env (QUEST_GEN_PROVIDER), else whichever API key is set."""
@@ -385,12 +466,20 @@ def extract_json(text):
         return None, f"JSON parse error: {e}"
 
 
-def call_model(provider, model, system, messages, api_key):
+def call_model(provider, model, system, messages, api_key, usage_sink=None):
     """One completion from the chosen provider. messages: [{'role':'user'|'assistant','content'}].
     Returns the model's text. Raises ImportError if the provider SDK isn't installed.
-    Retries with exponential backoff on 503 / rate-limit errors (free-tier friendly)."""
+    Retries with exponential backoff on 503 / rate-limit errors (free-tier friendly).
+    If `usage_sink` is a list, appends {model, input_tokens, output_tokens, cost_usd} per call."""
     retryable = ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED", "rate_limit", "overloaded")
     max_retries, delay = 2, 4   # short per-model backoff; call_with_fallback switches models next
+
+    def _record(tin, tout):
+        if usage_sink is not None:
+            usage_sink.append({"model": model, "input_tokens": int(tin or 0),
+                               "output_tokens": int(tout or 0),
+                               "cost_usd": estimate_cost(model, tin, tout)})
+
     for attempt in range(max_retries + 1):
         try:
             if provider == "anthropic":
@@ -400,6 +489,8 @@ def call_model(provider, model, system, messages, api_key):
                     model=model, max_tokens=GEN_MAX_TOKENS, system=system,
                     messages=[{"role": m["role"], "content": m["content"]} for m in messages],
                 )
+                u = getattr(msg, "usage", None)
+                _record(getattr(u, "input_tokens", 0), getattr(u, "output_tokens", 0))
                 return "".join(getattr(b, "text", "") for b in msg.content
                                if getattr(b, "type", "") == "text")
             # default: Google Gemini
@@ -417,6 +508,8 @@ def call_model(provider, model, system, messages, api_key):
                     response_mime_type="application/json",
                 ),
             )
+            um = getattr(resp, "usage_metadata", None)
+            _record(getattr(um, "prompt_token_count", 0), getattr(um, "candidates_token_count", 0))
             return resp.text or ""
         except Exception as e:
             if attempt < max_retries and any(k in str(e) for k in retryable):
@@ -426,14 +519,14 @@ def call_model(provider, model, system, messages, api_key):
             raise
 
 
-def call_with_fallback(provider, models, system, messages, api_key, log=None):
+def call_with_fallback(provider, models, system, messages, api_key, log=None, usage_sink=None):
     """Try each model in order; on ANY failure advance to the next one. This is what makes the
     agent survive free-tier limits: when a model's quota is exhausted (or it's unavailable), the
     next model in the chain takes over. Returns (text, model_used); raises only if all models fail."""
     errors = []
     for i, model in enumerate(models):
         try:
-            return call_model(provider, model, system, messages, api_key), model
+            return call_model(provider, model, system, messages, api_key, usage_sink=usage_sink), model
         except Exception as e:
             errors.append(f"{model}: {str(e)[:200]}")
             if i < len(models) - 1:
@@ -570,13 +663,26 @@ def create_story(theme, difficulty, length=14, title="", api_key=None, provider=
     if api_key is None:
         api_key = env_api_key(provider)
     system, user = build_prompts(theme, difficulty, length, title, language, language_level)
+    usage = []   # per-call token usage across attempts, for cost reporting
     if model_call is None:
         def model_call(system, messages):
-            text, _used = call_with_fallback(provider, models, system, messages, api_key, log=log)
+            text, _used = call_with_fallback(provider, models, system, messages, api_key,
+                                             log=log, usage_sink=usage)
             return text
 
     def _score(s):
         return int(s["correctness"]) + int(s["coherence"]) + int(s["balance"] == "PASS")
+
+    def _attach_usage(summary):
+        """Merge accumulated token/cost totals into a returned summary dict."""
+        info = {"tokens_in":  sum(u["input_tokens"] for u in usage),
+                "tokens_out": sum(u["output_tokens"] for u in usage),
+                "cost_usd":   round(sum(u["cost_usd"] for u in usage), 6),
+                "model_used": (usage[-1]["model"] if usage else ""),
+                "attempts":   len(usage)}
+        if isinstance(summary, dict):
+            out = dict(summary); out.update(info); return out
+        return info
 
     messages = [{"role": "user", "content": user}]
     tmp = tempfile.NamedTemporaryFile(prefix="story_engine_", suffix=".json", delete=False).name
@@ -607,7 +713,7 @@ def create_story(theme, difficulty, length=14, title="", api_key=None, provider=
                 final = out_path or unique_story_path(story.get("title") or theme)
                 save_story_file(story, final)
                 log(f"    ✓ all gates green — saved to {final}")
-                return True, final, summary
+                return True, final, _attach_usage(summary)
             messages += [{"role": "assistant", "content": json.dumps(story)},
                          {"role": "user", "content":
                           "Your story did NOT pass all gates. Fix EVERY item below and resend ONLY the "
@@ -631,7 +737,7 @@ def create_story(theme, difficulty, length=14, title="", api_key=None, provider=
         result["draft"] = True
         if limit_error:
             result["limit_error"] = str(limit_error)
-        return False, path, result
+        return False, path, _attach_usage(result)
     if limit_error and best is None:
         raise limit_error                         # nothing usable produced and the API was down
-    return False, None, (best[2] if best else None)
+    return False, None, _attach_usage(best[2] if best else None)

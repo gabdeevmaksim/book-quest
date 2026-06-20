@@ -94,6 +94,9 @@ hr { border-color: #2a2418 !important; margin: 0.8rem 0 !important; }
 
 DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"]
 
+# Support / donations — Ko-fi is live; swap in your own page if it changes.
+KOFI_URL = "https://ko-fi.com/dedulek"
+
 from story_engine import (  # Streamlit-free core (shared with story_agent.py)
     DIFFICULTIES, PROVIDER_LABEL, PROVIDER_PKG,
     gen_provider, gen_default_model, env_api_key,
@@ -101,6 +104,7 @@ from story_engine import (  # Streamlit-free core (shared with story_agent.py)
     validate_story_dict, balance_check, generate_story_api,
     gen_models, create_story, push_story_to_git,
     s3_enabled, push_story_to_s3, sync_stories_from_s3,
+    monthly_budget, month_spend, budget_exceeded, record_spend, free_fallback_models,
 )
 
 
@@ -552,6 +556,16 @@ def show_library():
                 select_story(s["path"])
                 st.rerun()
 
+    st.divider()
+    st.markdown(
+        f"<div style='text-align:center;margin:0.3rem 0'>"
+        f"<a href='{KOFI_URL}' target='_blank' style='color:#d4a843;text-decoration:none;"
+        f"font-family:\"Share Tech Mono\",monospace;font-size:0.85rem;border:1px solid #3a2e14;"
+        f"border-radius:4px;padding:0.55rem 1.1rem;background:#161208'>"
+        f"☕  Enjoying the quests? Support Quest Book on Ko-fi</a></div>",
+        unsafe_allow_html=True,
+    )
+
 
 def _push_story_to_git(path):
     """Commit + push the new story (story_engine.push_story_to_git). Non-fatal, but the
@@ -561,11 +575,22 @@ def _push_story_to_git(path):
 
 def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model,
                  language="English", language_level="C2"):
-    # The chosen model is tried first; the rest of the provider's chain are automatic
-    # fallbacks if it hits a free-tier limit. create_story runs the FULL gated pipeline
-    # (validate -> coherence -> balance, with repair) and only returns ok=True once a story
-    # passes every gate — so a story can't enter the library unless it's fully game-ready.
-    models = [model] + [m for m in gen_models(provider) if m != model]
+    # Monthly budget policy: while under the cap, use the owner's chosen (paid) model first,
+    # with the provider chain as automatic fallback. Once this month's paid spend reaches the
+    # cap, switch generation to the FREE Google chain; if there's no Google key for that
+    # backup, pause creation (the library stays fully playable). create_story runs the FULL
+    # gated pipeline (validate -> coherence -> balance, with repair) and only returns ok=True
+    # once every gate passes.
+    capped = False
+    if budget_exceeded():
+        google_key = env_api_key("google")
+        if not google_key:
+            return {"ok": False, "capped_blocked": True,
+                    "spend": round(month_spend(), 2), "budget": round(monthly_budget(), 2)}
+        capped, provider, api_key = True, "google", google_key
+        models = free_fallback_models()
+    else:
+        models = [model] + [m for m in gen_models(provider) if m != model]
     try:
         ok, path, summary = create_story(theme, difficulty, length, title_hint, api_key,
                                          provider=provider, models=models, max_attempts=5,
@@ -577,12 +602,20 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
                                         f"Install it with:  pip install {pkg}"]}
     except Exception as e:
         return {"ok": False, "errors": [f"Generation failed: {e}"]}
+
+    # bank this generation's cost against the monthly budget (≈0 when on the free chain)
+    if summary and summary.get("cost_usd") is not None:
+        record_spend(summary.get("cost_usd", 0.0), summary.get("model_used", ""),
+                     summary.get("tokens_in", 0), summary.get("tokens_out", 0))
     if ok:
         pushed, push_msg = _push_story_to_git(path)
         title = load_story_file(path).get("title") or theme
         out = {"ok": True, "path": path, "title": title,
                "pushed": pushed, "push_msg": push_msg,
-               "verdict": summary["balance"], "vlines": summary["bal_lines"], "gates": summary}
+               "verdict": summary["balance"], "vlines": summary["bal_lines"], "gates": summary,
+               "capped": capped, "cost_usd": summary.get("cost_usd"),
+               "model_used": summary.get("model_used"), "attempts": summary.get("attempts"),
+               "spend": round(month_spend(), 2), "budget": round(monthly_budget(), 2)}
         if s3_enabled():
             out["s3_ok"], out["s3_msg"] = push_story_to_s3(path)
         return out
@@ -600,7 +633,11 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
                "pushed": pushed, "push_msg": push_msg,
                "verdict": (summary or {}).get("balance", "—"),
                "vlines": (summary or {}).get("bal_lines", []),
-               "limit": (summary or {}).get("limit_error")}
+               "limit": (summary or {}).get("limit_error"),
+               "capped": capped, "cost_usd": (summary or {}).get("cost_usd"),
+               "model_used": (summary or {}).get("model_used"),
+               "attempts": (summary or {}).get("attempts"),
+               "spend": round(month_spend(), 2), "budget": round(monthly_budget(), 2)}
         if s3_enabled():
             out["s3_ok"], out["s3_msg"] = push_story_to_s3(path)
         return out
@@ -632,9 +669,23 @@ def show_create_page():
 
     res = st.session_state.get("gen_result")
     if res is not None:
+        if res.get("capped_blocked"):
+            st.error("✨ New-story creation is paused — this month's generation budget "
+                     f"(${res.get('budget', '?')}) is used up and no free backup key is "
+                     "configured. You can still play every story in the library.")
+            if st.button("📚  Back to library", use_container_width=True):
+                st.session_state.screen = "library"
+                st.session_state.pop("gen_result", None)
+                st.rerun()
+            return
         if res.get("ok"):
             st.success(f"Created **“{res['title']}”** — saved to `{res['path']}`.")
             st.caption("Passed every gate: validate ✓ · coherence ✓ · balance PASS")
+            if res.get("capped"):
+                st.info("Made with the **free model** — this month's premium budget is used up.")
+            if res.get("cost_usd") is not None:
+                st.caption(f"💸 cost ≈ ${res['cost_usd']:.4f} · {res.get('attempts', '?')} model "
+                           f"call(s) · month-to-date ${res.get('spend', '?')}/{res.get('budget', '?')}")
             _show_push_status(res)
             for ln in res.get("vlines", []):
                 st.caption(f"· {ln}")
@@ -651,6 +702,11 @@ def show_create_page():
             if res.get("limit"):
                 st.caption(f"A model limit was hit mid-run ({str(res['limit'])[:100]}…), so it stopped early.")
             st.caption("It's in your library marked **DRAFT** — playable now, or regenerate later for a clean version.")
+            if res.get("capped"):
+                st.info("Made with the **free model** — this month's premium budget is used up.")
+            if res.get("cost_usd") is not None:
+                st.caption(f"💸 cost ≈ ${res['cost_usd']:.4f} · {res.get('attempts', '?')} model "
+                           f"call(s) · month-to-date ${res.get('spend', '?')}/{res.get('budget', '?')}")
             _show_push_status(res)
             for ln in res.get("vlines", []):
                 st.caption(f"· {ln}")
@@ -678,6 +734,15 @@ def show_create_page():
         "added to your library — so every story is consistent, well-connected, and ready to play."
         "</div>", unsafe_allow_html=True)
 
+    if monthly_budget() > 0:
+        if budget_exceeded():
+            st.warning("This month's premium story budget is used up — new stories are created "
+                       "with the **free model** (it may be slower or occasionally unavailable). "
+                       "You can always play any story in the library.")
+        else:
+            st.caption(f"Story-generation budget this month: ${month_spend():.2f} / "
+                       f"${monthly_budget():.2f} used.")
+
     theme = st.text_input("Theme / setting",
                           placeholder="e.g. Pirate ghost ship · Cyberpunk heist · Norse myth · Haunted Mars colony")
     c1, c2 = st.columns([2, 3])
@@ -695,37 +760,26 @@ def show_create_page():
         help="Pick a lower level for language learning: simpler words, shorter sentences.",
     ).split(" ")[0]
 
-    detected = gen_provider()
-    with st.expander("⚙  Model & API key", expanded=not env_api_key(detected)):
-        provs = ["google", "anthropic"]
-        provider = st.selectbox("Provider", provs, index=provs.index(detected),
-                                format_func=lambda p: PROVIDER_LABEL[p])
-        model = st.text_input("Model", value=gen_default_model(provider), key=f"model_{provider}")
-        st.caption("If this model hits its free-tier limit mid-run, the agent auto-switches to the "
-                   "rest of the chain (customize with `QUEST_GEN_MODELS`).")
-        env_key = env_api_key(provider)
-        if env_key:
-            api_key = env_key
-            st.caption(f"Using your {PROVIDER_LABEL[provider]} key from the environment.")
-        else:
-            key_env = "GOOGLE_API_KEY" if provider == "google" else "ANTHROPIC_API_KEY"
-            api_key = st.text_input(f"{PROVIDER_LABEL[provider]} API key", type="password",
-                                    key=f"key_{provider}",
-                                    help="Used only for this request; not written to disk.")
-            st.caption(f"Tip: set `{key_env}` in your environment to skip this field.")
+    # Generation always uses the site owner's configured key (environment / Streamlit secrets).
+    # Users are NEVER asked for their own API key. Provider and model are owner-controlled via
+    # env: QUEST_GEN_PROVIDER (google|anthropic), QUEST_GEN_MODEL / QUEST_GEN_MODELS.
+    provider = gen_provider()
+    model    = gen_default_model(provider)
+    api_key  = env_api_key(provider)
 
-    if st.button("✨  Generate Story", use_container_width=True, disabled=not theme.strip()):
-        if not api_key:
-            st.warning(f"A {PROVIDER_LABEL[provider]} API key is required "
-                       "(set it in the environment or paste it under **Model & API key**).")
-        else:
-            with st.spinner("Summoning a new world… the model writes it, then it must pass the "
-                            "validate → coherence → balance gates (auto-repairing, and switching "
-                            "models if a free-tier limit is hit). This can take a couple of minutes."):
-                st.session_state.gen_result = _do_generate(
-                    theme.strip(), difficulty, length, title_hint.strip(), api_key, provider,
-                    model, language.strip() or "English", language_level)
-            st.rerun()
+    if not api_key:
+        st.info("✨ Story generation is currently unavailable — the site owner hasn't configured "
+                "a generation key yet. You can still play every story in the library.")
+
+    if st.button("✨  Generate Story", use_container_width=True,
+                 disabled=not theme.strip() or not api_key):
+        with st.spinner("Summoning a new world… the model writes it, then it must pass the "
+                        "validate → coherence → balance gates (auto-repairing). This can take "
+                        "a couple of minutes."):
+            st.session_state.gen_result = _do_generate(
+                theme.strip(), difficulty, length, title_hint.strip(), api_key, provider,
+                model, language.strip() or "English", language_level)
+        st.rerun()
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -763,6 +817,12 @@ def main():
     if st.sidebar.button("📚  Story Library", use_container_width=True, key="side_lib"):
         go_to_library()
         st.rerun()
+    st.sidebar.markdown(
+        f"<div style='text-align:center;margin-top:0.5rem'>"
+        f"<a href='{KOFI_URL}' target='_blank' style='color:#9a8a6a;font-size:0.8rem;"
+        f"font-family:monospace;text-decoration:none'>☕ Support on Ko-fi</a></div>",
+        unsafe_allow_html=True,
+    )
 
     # ── guard: hp ─────────────────────────────────────────────────────────────
     if st.session_state.hp <= 0:
