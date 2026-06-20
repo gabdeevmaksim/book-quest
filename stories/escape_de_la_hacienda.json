@@ -1,0 +1,421 @@
+{
+  "title": "Escape de la Hacienda",
+  "theme": "A story of escape from a narco cartel",
+  "difficulty": "normal",
+  "language": "Spanish",
+  "language_level": "B1",
+  "goal": "Escapa de los hombres del cartel, cruza la selva peligrosa y llega al otro lado de la frontera para salvar tu vida.",
+  "prologue": "Eres Mateo, un mecánico honesto de un pequeño pueblo. El cartel de los Escorpiones te secuestró para arreglar sus vehículos de contrabando. Sabes que no te dejarán salir vivo de la hacienda porque conoces demasiados secretos. Esta noche hay una fuerte tormenta y los guardias están distraídos. Es tu única oportunidad para escapar y correr hacia la frontera.",
+  "character_template": {
+    "health": 18,
+    "strength": 8,
+    "agility": 8,
+    "stamina": 8
+  },
+  "items": {
+    "bolt_cutters": {
+      "name": "Cizallas de metal",
+      "icon": "✂️",
+      "description": "Una herramienta pesada y fuerte para cortar cadenas o vallas metálicas."
+    },
+    "keycard": {
+      "name": "Tarjeta de seguridad",
+      "icon": "💳",
+      "description": "Una tarjeta magnética que abre las puertas del perímetro de la hacienda."
+    },
+    "machete": {
+      "name": "Machete viejo",
+      "icon": "🗡️",
+      "description": "Útil para abrirte paso entre la vegetación densa o para defenderte."
+    },
+    "bandages": {
+      "name": "Vendas limpias",
+      "icon": "🩹",
+      "description": "Un rollo de vendas médicas que puedes usar para recuperar un poco de salud.",
+      "use": {
+        "heal": 6
+      }
+    }
+  },
+  "start_location_id": "start",
+  "locations": {
+    "start": {
+      "description": "Estás atrapado en el taller mecánico de la hacienda. La lluvia golpea con fuerza el techo de metal. Los guardias vigilan el patio principal, pero la ventana trasera está rota y la puerta del garaje de al lado está abierta de par en par. Debes moverte rápido antes de que noten tu ausencia.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Escapar de forma silenciosa por la ventana rota hacia el patio central",
+          "target_id": "courtyard",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 8,
+            "dice_type": "1d6",
+            "fail_damage": 3
+          }
+        },
+        {
+          "text": "Entrar rápido al garaje principal por la puerta abierta",
+          "target_id": "garage"
+        }
+      ]
+    },
+    "garage": {
+      "description": "El garaje está oscuro y huele a aceite de motor. Hay herramientas tiradas por todos lados. En una mesa de trabajo de madera ves unas cizallas de metal oxidadas que podrían servirte para cortar metal más adelante.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Recoger las cizallas de metal de la mesa",
+          "target_id": "courtyard",
+          "gives_item": "bolt_cutters"
+        },
+        {
+          "text": "Salir silenciosamente por la ventana lateral hacia el desagüe",
+          "target_id": "drainage_pipe"
+        }
+      ]
+    },
+    "courtyard": {
+      "description": "El patio central está lleno de charcos de agua por la fuerte lluvia. Un guardia camina despacio cerca de la entrada principal. Desde aquí puedes ver la gran valla exterior, la caseta del guardia y un canal que va hacia el tubo de desagüe.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Correr directo hacia la valla exterior aprovechando la oscuridad",
+          "target_id": "outer_wall",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 9,
+            "dice_type": "1d6",
+            "fail_damage": 3
+          }
+        },
+        {
+          "text": "Entrar con sigilo a la caseta de guardia para buscar una llave de paso",
+          "target_id": "guard_post",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 8,
+            "dice_type": "1d6",
+            "fail_damage": 3
+          }
+        },
+        {
+          "text": "Saltar al lodo del canal para ir directo al desagüe",
+          "target_id": "drainage_pipe"
+        }
+      ]
+    },
+    "guard_post": {
+      "description": "La caseta de guardia está caliente y huele a café viejo. El guardia de turno duerme profundamente sobre su escritorio. Al lado de su radio brilla una tarjeta de seguridad electrónica que controla las puertas del perímetro.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Tomar la tarjeta de seguridad con cuidado y salir hacia la valla",
+          "target_id": "outer_wall",
+          "gives_item": "keycard"
+        },
+        {
+          "text": "Salir de la caseta antes de que despierte e ir directo al desagüe",
+          "target_id": "drainage_pipe"
+        }
+      ]
+    },
+    "outer_wall": {
+      "description": "Llegas frente a la alta valla de metal que rodea la hacienda. Arriba hay alambre de espinas muy afilado. La gran puerta de salida está cerrada con una cadena de hierro gruesa, y hay un lector electrónico que parpadea con luz roja.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Cortar la gruesa cadena con tus cizallas de metal",
+          "target_id": "jungle_edge",
+          "requires_item": "bolt_cutters"
+        },
+        {
+          "text": "Usar la tarjeta de seguridad en el lector electrónico",
+          "target_id": "jungle_edge",
+          "requires_item": "keycard"
+        },
+        {
+          "text": "Escalar la valla húmeda con cuidado sobre las espinas",
+          "target_id": "jungle_edge",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 10,
+            "dice_type": "1d6",
+            "fail_damage": 4
+          }
+        }
+      ]
+    },
+    "drainage_pipe": {
+      "description": "El tubo de desagüe es estrecho, frío y está lleno de agua sucia que te llega a las rodillas. El olor es horrible, pero este conducto pasa por debajo de los muros y te lleva fuera de la hacienda.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Avanzar con fuerza contra la corriente de agua turbia",
+          "target_id": "jungle_edge",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 8,
+            "dice_type": "1d6",
+            "fail_damage": 3
+          }
+        },
+        {
+          "text": "El olor es insoportable y el agua sube rápido. Volver atrás al patio",
+          "target_id": "courtyard"
+        }
+      ]
+    },
+    "jungle_edge": {
+      "description": "¡Por fin estás fuera de la hacienda! Frente a ti se extiende una selva profunda, oscura y misteriosa. A tu izquierda se escucha el fuerte sonido de un río crecido. A tu derecha, la vegetación es tan cerrada que asusta.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Seguir la ruta que va al lado del río de lodo",
+          "target_id": "muddy_river"
+        },
+        {
+          "text": "Entrar de lleno en la vegetación espesa de la selva",
+          "target_id": "dense_foliage"
+        }
+      ]
+    },
+    "muddy_river": {
+      "description": "El río está muy peligroso debido a la tormenta y el agua baja con mucha velocidad. Cruzar nadando parece una locura, pero caminar por la orilla rocosa y mojada te hará perder mucho tiempo.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Saltar al agua e intentar cruzar el río nadando",
+          "target_id": "river_bank",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 9,
+            "dice_type": "1d6",
+            "fail_damage": 3
+          }
+        },
+        {
+          "text": "Caminar con cuidado por la orilla resbaladiza hacia un viejo campamento",
+          "target_id": "abandoned_camp"
+        }
+      ]
+    },
+    "dense_foliage": {
+      "description": "Las ramas bajas y las espinas cortan tu ropa y tu piel mientras avanzas muy despacio. De repente, ves un machete viejo clavado en el tronco de un árbol podrido. Parece que alguien lo dejó allí hace tiempo.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Tomar el machete viejo del tronco del árbol",
+          "target_id": "abandoned_camp",
+          "gives_item": "machete"
+        },
+        {
+          "text": "Seguir abriendo el camino con tus propias manos sin herramientas",
+          "target_id": "abandoned_camp",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 8,
+            "dice_type": "1d6",
+            "fail_damage": 3
+          }
+        }
+      ]
+    },
+    "abandoned_camp": {
+      "description": "Llegas a un pequeño claro que sirvió de campamento hace mucho tiempo. Hay restos de una fogata mojada y una lona azul rota. En el suelo ves un botiquín médico de tela con unas vendas limpias en su interior.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Recoger las vendas limpias del suelo",
+          "target_id": "rope_bridge",
+          "gives_item": "bandages"
+        },
+        {
+          "text": "Usar tu machete para abrir un camino rápido directo a una cabaña",
+          "target_id": "ruined_shack",
+          "requires_item": "machete"
+        },
+        {
+          "text": "Continuar por el sendero normal hacia el puente de cuerda",
+          "target_id": "rope_bridge"
+        }
+      ]
+    },
+    "rope_bridge": {
+      "description": "Un viejo puente de cuerda cruza un abismo profundo. Las tablas de madera están húmedas y rotas, y el viento de la tormenta balancea el puente de forma peligrosa de un lado a otro.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Correr rápidamente por el puente inestable antes de que se caiga",
+          "target_id": "ruined_shack",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 9,
+            "dice_type": "1d6",
+            "fail_damage": 4,
+            "fail_target": "river_bank"
+          }
+        },
+        {
+          "text": "Bajar con paciencia por el desfiladero rocoso hacia la orilla del río",
+          "target_id": "river_bank"
+        }
+      ]
+    },
+    "river_bank": {
+      "description": "Estás abajo, en la orilla pedregosa del río. El aire es frío y el agua salpica tu rostro. El camino de subida es empinado y estás muy cansado, pero no puedes quedarte aquí mucho tiempo.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Subir la colina empinada usando tu fuerza física",
+          "target_id": "ruined_shack",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 9,
+            "dice_type": "1d6",
+            "fail_damage": 3
+          }
+        },
+        {
+          "text": "Detenerte a descansar un momento bajo unas rocas para recuperar fuerzas",
+          "target_id": "cartel_patrol",
+          "heals": 4
+        }
+      ]
+    },
+    "ruined_shack": {
+      "description": "Encuentras una cabaña de madera abandonada y en ruinas. Aunque el techo está roto, te ofrece un pequeño refugio de la lluvia fría. Es un buen lugar para esconderte o tratar tus heridas si tienes suministros.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Esconderte en el sótano oscuro de la cabaña por si vienen enemigos",
+          "target_id": "cartel_patrol"
+        },
+        {
+          "text": "Seguir avanzando de prisa hacia el pantano antes de que amanezca",
+          "target_id": "swamp"
+        }
+      ]
+    },
+    "cartel_patrol": {
+      "description": "¡Mala suerte! Una patrulla de sicarios armados con linternas aparece entre los árboles. Sus luces buscan por toda la zona y se acercan rápidamente a donde estás.",
+      "is_end": false,
+      "monster": {
+        "name": "Sicario del Cartel",
+        "strength": 10,
+        "fail_damage": 5,
+        "dice_type": "1d6",
+        "attribute": "strength"
+      },
+      "choices": [
+        {
+          "text": "Correr desesperadamente hacia el pantano denso para perderlos",
+          "target_id": "swamp",
+          "is_flee": true
+        },
+        {
+          "text": "Continuar hacia la carretera ahora que el camino está libre",
+          "target_id": "highway_approach"
+        }
+      ]
+    },
+    "swamp": {
+      "description": "El pantano está lleno de agua estancada y un lodo negro y espeso que te atrapa las piernas. El aire aquí es pesado y es muy fácil hundirse si no tienes cuidado con dónde pisas.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Cruzar el pantano usando toda tu resistencia física",
+          "target_id": "highway_approach",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 9,
+            "dice_type": "1d6",
+            "fail_damage": 4
+          }
+        },
+        {
+          "text": "Usar el machete viejo para apoyarte en las raíces y avanzar seguro",
+          "target_id": "highway_approach",
+          "requires_item": "machete"
+        }
+      ]
+    },
+    "highway_approach": {
+      "description": "La vegetación de la selva finalmente termina y puedes ver las luces lejanas de la carretera. Se escuchan camiones pesados, lo que indica que la frontera está cerca. Pero hay una camioneta del cartel vigilando el camino.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Esquivar la camioneta y avanzar con sigilo hacia el control de la frontera",
+          "target_id": "border_checkpoint"
+        },
+        {
+          "text": "Intentar meterte en la caja de carga de un camión que está parado en la carretera",
+          "target_id": "end_victory_truck",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 10,
+            "dice_type": "1d6",
+            "fail_damage": 5,
+            "fail_target": "end_captured"
+          }
+        }
+      ]
+    },
+    "border_checkpoint": {
+      "description": "Estás frente al gran puesto de control de la frontera. Potentes luces iluminan toda la calle y varios oficiales armados revisan los autos. Detrás de las cercas metálicas está la libertad. Es el último esfuerzo.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Esperar un momento de sombra y correr con todas tus fuerzas hacia el otro lado",
+          "target_id": "end_victory_border",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 10,
+            "dice_type": "1d6",
+            "fail_damage": 5,
+            "fail_target": "end_captured"
+          }
+        },
+        {
+          "text": "Usar el machete para cortar la valla de metal en una zona sin luz",
+          "target_id": "end_victory_border",
+          "requires_item": "machete"
+        },
+        {
+          "text": "Intentar cruzar nadando por el río debajo del puente fronterizo",
+          "target_id": "end_victory_border",
+          "condition": {
+            "attribute": "agility",
+            "check_value": 9,
+            "dice_type": "1d6",
+            "fail_damage": 4,
+            "fail_target": "end_jungle_lost"
+          }
+        }
+      ]
+    },
+    "end_victory_border": {
+      "description": "¡Lo lograste! Cruzas la línea de la frontera y caes cansado frente a los oficiales del otro país. Estás a salvo de los hombres del cartel. Tu pesadilla en la hacienda ha terminado y finalmente eres un hombre libre.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "end_victory_truck": {
+      "description": "El camión acelera y cruza el control de la frontera sin problemas. Unas millas más adelante, cuando el vehículo se detiene, saltas de la caja de carga. El aire es diferente aquí. Estás libre y muy lejos de tus captores.",
+      "is_end": true,
+      "is_victory": true,
+      "choices": []
+    },
+    "end_captured": {
+      "description": "Los potentes faros de los vehículos del cartel te iluminan la cara. Escuchas gritos y pasos rápidos antes de que te tiren al suelo de manera violenta. Te han atrapado. Los hombres del cartel te llevan de vuelta a la hacienda.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    },
+    "end_jungle_lost": {
+      "description": "La corriente del río debajo del puente es demasiado fuerte por la tormenta. Sin energías para luchar contra el agua, te hundes en la fría corriente de la selva. La naturaleza ha decidido tu destino esta noche.",
+      "is_end": true,
+      "is_victory": false,
+      "choices": []
+    }
+  }
+}
