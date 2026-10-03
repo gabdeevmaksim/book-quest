@@ -1,5 +1,6 @@
 # Use an official Python runtime as a parent image
-FROM python:3.9-slim
+# (3.12 — same version CI tests with; 3.9 is end-of-life and newer Streamlit drops it)
+FROM python:3.12-slim
 
 # Set the working directory in the container
 WORKDIR /app

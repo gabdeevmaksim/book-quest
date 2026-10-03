@@ -1,0 +1,99 @@
+# CI/CD for Quest Book.
+#   • Every push / PR to master: install deps, byte-compile, run the test suite.
+#   • Push to master (tests green): deploy to the DigitalOcean droplet over SSH.
+#   • Manual redeploy: Actions → "CI / Deploy" → Run workflow.
+# One-time setup (secrets, deploy key, droplet prep): see DEPLOY.md.
+name: CI / Deploy
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "stories/**"            # stories are committed by the app itself on the droplet — no restart loop
+      - "docs/**"               # landing page → served by GitHub Pages
+      - "**/*.md"
+      - ".github/FUNDING.yml"
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false     # never interrupt a deploy halfway
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"        # same as the Docker image
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Byte-compile
+        run: python -m py_compile app.py story_engine.py story_agent.py playtest.py compare_models.py
+
+      - name: Run tests
+        run: python -m pytest -q tests
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check deploy secrets
+        run: |
+          for v in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH; do
+            [ -n "${!v}" ] || { echo "::error::Secret $v is not set (see DEPLOY.md)"; exit 1; }
+          done
+
+      - name: Set up SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          [ -n "$DEPLOY_SSH_KEY" ] || { echo "::error::Secret DEPLOY_SSH_KEY is not set"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "$DEPLOY_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts      # pinned host key (recommended)
+          else
+            ssh-keyscan -H "$DEPLOY_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          fi
+          printf 'Host droplet\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/deploy_key\n  BatchMode yes\n  ConnectTimeout 20\n' \
+            "$DEPLOY_HOST" "$DEPLOY_USER" > ~/.ssh/config
+
+      - name: Upload .env from the DOTENV secret
+        env:
+          DOTENV: ${{ secrets.DOTENV }}
+        run: |
+          if [ -z "$DOTENV" ]; then
+            echo "DOTENV secret not set — keeping the droplet's existing .env"
+            exit 0
+          fi
+          umask 077
+          printf '%s\n' "$DOTENV" > "$RUNNER_TEMP/env.incoming"
+          scp -q "$RUNNER_TEMP/env.incoming" "droplet:$DEPLOY_PATH/.env.incoming"
+          rm -f "$RUNNER_TEMP/env.incoming"
+
+      - name: Deploy
+        run: ssh droplet "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_BRANCH=master bash -s" < scripts/deploy.sh
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

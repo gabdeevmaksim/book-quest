@@ -106,6 +106,71 @@ from story_engine import (  # Streamlit-free core (shared with story_agent.py)
     s3_enabled, push_story_to_s3, sync_stories_from_s3,
     monthly_budget, month_spend, budget_exceeded, record_spend, free_fallback_models,
 )
+import urllib.parse
+
+
+# ── sharing & deep links ──────────────────────────────────────────────────────
+# Public base URL used in share links. Set QUEST_PUBLIC_URL (e.g. https://play.yourdomain)
+# once you have a domain; until then it falls back to the droplet's address.
+PUBLIC_URL = (os.environ.get("QUEST_PUBLIC_URL") or "http://134.122.120.45").rstrip("/")
+
+SHARE_TARGETS = [
+    ("Telegram", "https://t.me/share/url?url={u}&text={t}"),
+    ("VK",       "https://vk.com/share.php?url={u}&title={t}"),
+    ("WhatsApp", "https://wa.me/?text={t}%20{u}"),
+    ("X",        "https://x.com/intent/tweet?text={t}&url={u}"),
+]
+
+
+def story_slug(path):
+    """Library key for a story: its filename without .json (used in ?story= links)."""
+    return os.path.splitext(os.path.basename(path or ""))[0]
+
+
+def story_url(path):
+    return f"{PUBLIC_URL}/?story={urllib.parse.quote(story_slug(path))}"
+
+
+def find_story_by_slug(slug):
+    """Resolve ?story=<slug> to a library path. Only matches files that are actually in
+    the library, so a crafted link can never reach anything outside stories/."""
+    for s in list_stories():
+        if not s.get("error") and story_slug(s["path"]) == slug:
+            return s["path"]
+    return None
+
+
+def share_links_html(text, url):
+    q = lambda v: urllib.parse.quote(v, safe="")
+    t, u = q(text), q(url)
+    links = " · ".join(
+        f"<a href='{tpl.format(u=u, t=t)}' target='_blank' rel='noopener' "
+        f"style='color:#d4a843;text-decoration:none'>{name}</a>"
+        for name, tpl in SHARE_TARGETS)
+    return (f"<div style='font-family:monospace;font-size:0.88rem;margin:0.2rem 0 0.6rem'>"
+            f"{links}</div>")
+
+
+def render_share(text, url, label="🔗  Share"):
+    """Share menu: one-click links to Telegram, VK, WhatsApp, X + a copyable link."""
+    box = (st.popover(label, use_container_width=True) if hasattr(st, "popover")
+           else st.expander(label))
+    with box:
+        st.markdown(share_links_html(text, url), unsafe_allow_html=True)
+        st.caption("Or copy the link:")
+        st.code(url, language=None)
+
+
+def render_result_share(story, victory):
+    """Share button for the end screen, with the player's result in the message."""
+    title = story.get("title", "Quest Book")
+    path = st.session_state.get("active_story_path")
+    if victory:
+        hp, mx = max(st.session_state.get("hp", 0), 0), st.session_state.get("max_hp", 0)
+        text = f"I conquered “{title}” on Quest Book with {hp}/{mx} HP left! Can you do better?"
+    else:
+        text = f"I met my end in “{title}” on Quest Book… Think you can survive it?"
+    render_share(text, story_url(path) if path else PUBLIC_URL, label="🔗  Share your result")
 
 
 # ── dice & text helpers ───────────────────────────────────────────────────────
@@ -472,6 +537,7 @@ def go_to_library():
     for k in list(st.session_state.keys()):
         del st.session_state[k]
     st.session_state.screen = "library"
+    st.query_params.clear()          # drop ?story= so the library URL stays clean
 
 
 def select_story(path):
@@ -482,6 +548,7 @@ def select_story(path):
     st.session_state.active_story      = story
     st.session_state.active_story_path = path
     st.session_state.screen            = "game"
+    st.query_params["story"] = story_slug(path)   # the address bar is now a shareable link
 
 
 # ── library / create screens ──────────────────────────────────────────────────
@@ -514,6 +581,10 @@ def _lang_tag(s):
 def show_library():
     st.markdown("<h1>📖 Quest Book</h1>", unsafe_allow_html=True)
     st.caption("Choose your adventure — or forge a new one.")
+
+    missing = st.session_state.pop("deep_link_missing", None)
+    if missing:
+        st.warning(f"The shared story “{missing}” isn't in the library — pick another adventure below.")
 
     n, errs = st.session_state.get("s3_sync_info", (0, []))
     if errs:
@@ -552,9 +623,13 @@ def show_library():
                 f"<div style='color:#a99878;font-size:0.84rem;line-height:1.5'>{goal}</div></div>",
                 unsafe_allow_html=True,
             )
-            if st.button("▶  Play", key=f"play_{s['path']}", use_container_width=True):
+            c_play, c_share = st.columns([3, 1])
+            if c_play.button("▶  Play", key=f"play_{s['path']}", use_container_width=True):
                 select_story(s["path"])
                 st.rerun()
+            with c_share:
+                render_share(f"Play “{s['title']}” — a free choose-your-own-adventure on Quest Book",
+                             story_url(s["path"]), label="🔗")
 
     st.divider()
     st.markdown(
@@ -792,6 +867,17 @@ def main():
         n, errs = sync_stories_from_s3()
         st.session_state.s3_sync_info = (n, errs)
 
+    # deep link: ?story=<slug> opens that story straight away (shared links / bookmarks)
+    wanted = st.query_params.get("story")
+    if (wanted and st.session_state.get("screen") != "create"
+            and st.session_state.get("active_story_path") is None):
+        path = find_story_by_slug(wanted)
+        if path:
+            select_story(path)
+        else:
+            st.query_params.clear()
+            st.session_state.deep_link_missing = wanted
+
     screen = st.session_state.get("screen", "library")
 
     if screen == "create":
@@ -833,6 +919,7 @@ def main():
 
     if st.session_state.game_over:
         st.error("💀  GAME OVER — Your journey ends in the dust.")
+        render_result_share(story, victory=False)
         show_end_buttons(story)
         return
 
@@ -984,6 +1071,7 @@ def main():
             st.success("🎉  **VICTORY!** Your journey is complete.")
         else:
             st.error("💀  Your story ends here.")
+        render_result_share(story, victory=curr_loc.get("is_victory", True))
         show_end_buttons(story)
         return
 

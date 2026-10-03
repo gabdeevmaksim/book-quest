@@ -23,9 +23,15 @@ streamlit run app.py
 docker-compose up --build
 ```
 
+**Production (CI/CD):** pushing to `master` runs `.github/workflows/deploy.yml` — tests
+(`python -m pytest tests`), then an SSH deploy to the DigitalOcean droplet via
+`scripts/deploy.sh` (pull → optional `.env` from the `DOTENV` secret → `docker compose up -d
+--build` → health check). Pushes touching only `stories/`, `docs/`, `*.md` don't redeploy.
+Setup and secrets: `DEPLOY.md`. Run the tests locally before pushing.
+
 App runs at `http://localhost:8501`. In-app story creation needs a model API key — a Google
 Gemini key (`GOOGLE_API_KEY`, the default provider) or an Anthropic key (`ANTHROPIC_API_KEY`) —
-set in the environment or pasted into the Create page.
+set in the environment (users are never asked for their own key).
 
 ## Story Pipeline
 
