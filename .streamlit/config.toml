@@ -1,0 +1,12 @@
+# Streamlit settings for Quest Book.
+# Dark theme in the app's own colours, so native widgets (text inputs, radios, sliders,
+# forms, popovers, toasts) match the hand-styled UI instead of Streamlit's white/red defaults.
+[theme]
+base = "dark"
+primaryColor = "#d4a843"              # amber — sliders, selected radios, focus rings
+backgroundColor = "#0f0d0a"
+secondaryBackgroundColor = "#1a150b"  # input fields, code blocks
+textColor = "#c8b49a"
+
+[browser]
+gatherUsageStats = false

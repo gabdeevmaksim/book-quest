@@ -12,6 +12,7 @@ env/
 
 # Generated stories (user content, ephemeral on cloud)
 stories/*.json
+stories/_archive/
 
 # Cost / usage ledger (monthly spend tracking)
 state/

@@ -76,6 +76,53 @@ h2, h3 { color: #b89a6a !important; font-family: 'Special Elite', Georgia, serif
     background-color: #2a2210 !important;
 }
 
+/* Form submit buttons (feedback "Send") — same look as the regular buttons */
+[data-testid="stFormSubmitButton"] > button {
+    background-color: #161208 !important;
+    color: #b8a07a !important;
+    border: 1px solid #3a2e14 !important;
+    border-radius: 3px !important;
+    font-family: 'Share Tech Mono', 'Courier New', monospace !important;
+    font-size: 0.88rem !important;
+    min-height: 2.6em !important;
+}
+[data-testid="stFormSubmitButton"] > button:hover {
+    background-color: #201a0c !important;
+    border-color: #d4a843 !important;
+    color: #f0d890 !important;
+}
+
+/* Popover buttons (Share) + their dropdown — match the dark buttons instead of Streamlit's white */
+[data-testid="stPopoverButton"] {
+    background-color: #161208 !important;
+    color: #b8a07a !important;
+    border: 1px solid #3a2e14 !important;
+    border-radius: 3px !important;
+    font-family: 'Share Tech Mono', 'Courier New', monospace !important;
+    font-size: 0.85rem !important;
+    min-height: 2.8em !important;
+    padding: 0.7em 0.5em !important;
+    justify-content: center !important;
+    box-shadow: none !important;
+    transition: all 0.12s ease !important;
+}
+[data-testid="stPopoverButton"]:hover {
+    background-color: #201a0c !important;
+    border-color: #d4a843 !important;
+    color: #f0d890 !important;
+}
+[data-testid="stPopoverButton"] * { color: inherit !important; }
+[data-testid="stPopoverBody"] {
+    background-color: #141008 !important;
+    border: 1px solid #3a2e14 !important;
+}
+[data-testid="stPopoverBody"] [data-testid="stCode"] pre,
+[data-testid="stPopoverBody"] [data-testid="stCode"] code {
+    background-color: #0c0a07 !important;
+    color: #c8b49a !important;
+}
+[data-testid="stPopoverBody"] [data-testid="stCode"] pre { border: 1px solid #2a2010 !important; }
+
 /* Expander */
 [data-testid="stExpander"] summary       { color: #7a6a4a !important; font-family: 'Share Tech Mono', monospace !important; font-size: 0.82rem !important; }
 [data-testid="stExpander"] [role="group"]{ background: #0c0a07 !important; border: none !important; }
@@ -94,8 +141,9 @@ hr { border-color: #2a2418 !important; margin: 0.8rem 0 !important; }
 
 DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"]
 
-# Support / donations — Ko-fi is live; swap in your own page if it changes.
-KOFI_URL = "https://ko-fi.com/dedulek"
+# Support / donations
+KOFI_URL     = "https://ko-fi.com/dedulek"
+SPONSORS_URL = "https://github.com/sponsors/gabdeevmaksim"
 
 from story_engine import (  # Streamlit-free core (shared with story_agent.py)
     DIFFICULTIES, PROVIDER_LABEL, PROVIDER_PKG,
@@ -105,8 +153,32 @@ from story_engine import (  # Streamlit-free core (shared with story_agent.py)
     gen_models, create_story, push_story_to_git,
     s3_enabled, push_story_to_s3, sync_stories_from_s3,
     monthly_budget, month_spend, budget_exceeded, record_spend, free_fallback_models,
+    review_models,
 )
 import urllib.parse
+
+import feedback   # player feedback: file + Telegram (Streamlit-free, see feedback.py)
+import quota as Q  # Gemini free-tier limits: per-model counters, capacity, one-at-a-time slot
+import hashlib
+import uuid
+
+
+def player_id():
+    """Anonymous per-player key for the daily story cap: a short hash of the IP address when
+    Streamlit exposes it, else a per-browser-session id (kept across navigation)."""
+    ctx = getattr(st, "context", None)
+    ip = None
+    try:
+        ip = getattr(ctx, "ip_address", None) or \
+            ((ctx.headers.get("X-Forwarded-For") or "").split(",")[0].strip() if ctx else None)
+    except Exception:
+        ip = None
+    if ip:
+        return "ip:" + hashlib.sha256(ip.encode()).hexdigest()[:16]
+    if not st.session_state.get("fbmeta_player"):
+        st.session_state["fbmeta_player"] = uuid.uuid4().hex[:16]
+    return "s:" + st.session_state["fbmeta_player"]
+import game_rules as R   # challenge mechanics, shared with playtest.py (see game_rules.py)
 
 
 # ── sharing & deep links ──────────────────────────────────────────────────────
@@ -116,7 +188,6 @@ PUBLIC_URL = (os.environ.get("QUEST_PUBLIC_URL") or "http://134.122.120.45").rst
 
 SHARE_TARGETS = [
     ("Telegram", "https://t.me/share/url?url={u}&text={t}"),
-    ("VK",       "https://vk.com/share.php?url={u}&title={t}"),
     ("WhatsApp", "https://wa.me/?text={t}%20{u}"),
     ("X",        "https://x.com/intent/tweet?text={t}&url={u}"),
 ]
@@ -151,8 +222,8 @@ def share_links_html(text, url):
             f"{links}</div>")
 
 
-def render_share(text, url, label="🔗  Share"):
-    """Share menu: one-click links to Telegram, VK, WhatsApp, X + a copyable link."""
+def render_share(text, url, label="Share"):
+    """Share menu: one-click links to Telegram, WhatsApp, X + a copyable link."""
     box = (st.popover(label, use_container_width=True) if hasattr(st, "popover")
            else st.expander(label))
     with box:
@@ -170,33 +241,145 @@ def render_result_share(story, victory):
         text = f"I conquered “{title}” on Quest Book with {hp}/{mx} HP left! Can you do better?"
     else:
         text = f"I met my end in “{title}” on Quest Book… Think you can survive it?"
-    render_share(text, story_url(path) if path else PUBLIC_URL, label="🔗  Share your result")
+    render_share(text, story_url(path) if path else PUBLIC_URL, label="Share your result")
+
+
+# ── feedback ──────────────────────────────────────────────────────────────────
+# Submissions are saved to state/feedback.jsonl and sent to the owner's Telegram
+# (see feedback.py). Context (story, location, HP, outcome) is attached automatically.
+FB_KINDS    = {"bug": "Bug", "story": "Story", "idea": "Idea", "other": "Other"}
+FB_STARS    = ["★", "★★", "★★★", "★★★★", "★★★★★"]
+FB_COOLDOWN = 60       # seconds between submissions per session
+FB_MAX      = 5        # submissions per session
+# Session keys with this prefix survive navigation (library / restart / new story), so the
+# cooldown and "already rated" flags can't be reset just by going back to the library.
+FB_KEEP_PREFIX = "fbmeta_"
+
+
+@lru_cache(maxsize=1)
+def app_version():
+    """Short git hash of the running code (shown in feedback so bugs map to a version)."""
+    try:
+        r = subprocess.run(["git", "-c", "safe.directory=*", "rev-parse", "--short", "HEAD"],
+                           capture_output=True, text=True, timeout=5)
+        return r.stdout.strip()
+    except Exception:
+        return ""
+
+
+def clear_session():
+    """Reset session state for a new screen/run, keeping the feedback anti-spam bookkeeping."""
+    for k in list(st.session_state.keys()):
+        if not str(k).startswith(FB_KEEP_PREFIX):
+            del st.session_state[k]
+
+
+def feedback_context():
+    """Game context attached to every submission so reports are reproducible."""
+    ss = st.session_state
+    ctx = {"screen": ss.get("screen", "library"), "version": app_version()}
+    story = ss.get("active_story")
+    if story:
+        ctx.update(story=story.get("title", ""), slug=story_slug(ss.get("active_story_path")),
+                   difficulty=story.get("difficulty", ""),
+                   language=story.get("language") or "English")
+        if ss.get("char_creation_done"):
+            loc = ss.get("current_loc")
+            node = (ss.get("locations") or {}).get(loc, {})
+            if ss.get("game_over") or ss.get("hp", 1) <= 0:
+                outcome = "defeat"
+            elif node.get("is_end"):
+                outcome = "victory" if node.get("is_victory", True) else "bad ending"
+            else:
+                outcome = "playing"
+            ctx.update(location=loc, hp=f"{ss.get('hp')}/{ss.get('max_hp')}", outcome=outcome)
+    return {k: v for k, v in ctx.items() if v not in (None, "")}
+
+
+def _feedback_blocked():
+    ss = st.session_state
+    if ss.get("fbmeta_count", 0) >= FB_MAX:
+        return "Thanks — you've already sent plenty of feedback this session!"
+    wait = FB_COOLDOWN - (time.time() - ss.get("fbmeta_last", 0))
+    if wait > 0:
+        return f"Please wait {int(wait) + 1} s before sending more feedback."
+    return None
+
+
+def send_feedback(kind, message, rating=None, contact=""):
+    """Validate, rate-limit and submit. Returns (ok, note) for the UI."""
+    if not (message or "").strip() and not rating:
+        return False, "Write a message or pick a rating first."
+    blocked = _feedback_blocked()
+    if blocked:
+        return False, blocked
+    res = feedback.submit(kind, message, rating, contact, feedback_context())
+    if not res["saved"]:
+        return False, "Sorry — your feedback couldn't be saved right now. Please try again later."
+    st.session_state.fbmeta_count = st.session_state.get("fbmeta_count", 0) + 1
+    st.session_state.fbmeta_last = time.time()
+    return True, "Thank you! Your feedback reached the author."
+
+
+def render_feedback(where, label="Send feedback"):
+    """Feedback popover: kind, optional star rating, message, optional contact."""
+    with st.popover(label, use_container_width=True):
+        with st.form(f"fb_form_{where}", clear_on_submit=True, border=False):
+            kind = st.radio("What is it about?", list(FB_KINDS), format_func=FB_KINDS.get,
+                            horizontal=True, key=f"fb_kind_{where}")
+            stars = st.radio("Rating (optional)", FB_STARS, index=None, horizontal=True,
+                             key=f"fb_rate_{where}")
+            message = st.text_area("Message", max_chars=feedback.MAX_MESSAGE,
+                                   key=f"fb_msg_{where}",
+                                   placeholder="A bug, a story you loved or hated, an idea…")
+            contact = st.text_input("Contact (optional)", max_chars=feedback.MAX_CONTACT,
+                                    key=f"fb_contact_{where}",
+                                    placeholder="Email or Telegram, if you'd like a reply")
+            sent = st.form_submit_button("Send", use_container_width=True)
+        if sent:
+            ok, note = send_feedback(kind, message, len(stars) if stars else None, contact)
+            (st.success if ok else st.warning)(note)
+            if ok:
+                st.toast(note)
+        st.caption("Your current story, location and HP are attached automatically.")
+
+
+def render_rate_story(story):
+    """End-screen 'How did you like this story?' — once per story per session."""
+    slug = story_slug(st.session_state.get("active_story_path")) or story.get("title", "story")
+    flag = f"{FB_KEEP_PREFIX}rated_{slug}"
+    if st.session_state.get(flag):
+        st.caption("★ Thanks for rating this story!")
+        return
+    with st.form("fb_form_end", clear_on_submit=True):
+        st.markdown("**How did you like this story?**")
+        stars = st.radio("Rating", FB_STARS, index=None, horizontal=True, key="fb_rate_end",
+                         label_visibility="collapsed")
+        comment = st.text_input("Comment (optional)", max_chars=feedback.MAX_MESSAGE,
+                                key="fb_msg_end", placeholder="What worked, what didn't?")
+        sent = st.form_submit_button("Send rating", use_container_width=True)
+    if sent:
+        if not stars:
+            st.warning("Pick 1–5 stars first.")
+        else:
+            ok, note = send_feedback("story", comment, len(stars))
+            if ok:
+                st.session_state[flag] = True
+                st.success("★ Thanks for rating this story!")
+            else:
+                st.warning(note)
 
 
 # ── dice & text helpers ───────────────────────────────────────────────────────
 
 
 def roll_dice(dice_type="1d6"):
-    num, sides = map(int, dice_type.split("d"))
-    return sum(random.randint(1, sides) for _ in range(num))
-
-
-@lru_cache(maxsize=None)
-def _dice_sums(dice_type="1d6"):
-    """All equally-likely totals for a dice expression (e.g. 2d6 -> 36 outcomes)."""
-    num, sides = map(int, dice_type.split("d"))
-    sums = [0]
-    for _ in range(num):
-        sums = [t + face for t in sums for face in range(1, sides + 1)]
-    return tuple(sums)
+    return R.roll_dice(dice_type)
 
 
 def pass_probability(dice_type, need):
     """P(dice roll >= need). need = check_value - attribute - bonuses."""
-    outs = _dice_sums(dice_type)
-    if not outs:
-        return 0.0
-    return sum(1 for o in outs if o >= need) / len(outs)
+    return R.pass_probability(dice_type, need)
 
 
 def odds_label(dice_type, check_value, attr_val, bonus=0):
@@ -307,8 +490,7 @@ def restart(story, keep_char=False):
     attrs  = st.session_state.get("attributes")
     max_hp = st.session_state.get("max_hp")
     path   = st.session_state.get("active_story_path")
-    for k in list(st.session_state.keys()):
-        del st.session_state[k]
+    clear_session()
     st.session_state.active_story      = story
     st.session_state.active_story_path = path
     if keep_char and attrs is not None:
@@ -323,10 +505,27 @@ def restart(story, keep_char=False):
         st.session_state.char_creation_done = True
         st.session_state.pending_choice     = None
         st.session_state.pending_combat     = False
+        st.session_state.history            = []
+        st.session_state.last_outcome       = None
+
+
+def move_to(target):
+    """Move the hero, remembering where they came from (for easy-mode Go Back)."""
+    st.session_state.setdefault("history", []).append(st.session_state.current_loc)
+    st.session_state.current_loc = target
+
+
+def take_choice(choice, story):
+    """A choice button was clicked: checks wait for the dice, everything else moves at once."""
+    st.session_state.last_outcome = None
+    if "condition" in choice:
+        st.session_state.pending_choice = choice
+    else:
+        apply_choice_target(choice, story)
 
 
 def apply_choice_target(choice, story):
-    st.session_state.current_loc = choice["target_id"]
+    move_to(choice["target_id"])
     for item_id in _coerce_list(choice.get("gives_item")):
         if item_id not in st.session_state.inventory:
             st.session_state.inventory.append(item_id)
@@ -360,69 +559,84 @@ def _item_bonus(cond):
 
 # ── dice resolution ───────────────────────────────────────────────────────────
 
+def _record_outcome(res, story):
+    """Apply a resolved challenge: lose HP on failure, log it, and keep it for the outcome card."""
+    st.session_state.hp -= res["damage"]
+    bonus_txt = f"+{res['bonus']}({item_name(story, res['bonus_item'])})" if res["bonus"] else ""
+    math = f"{res['roll']}+{res['attr_value']}{bonus_txt}={res['total']} vs DC {res['dc']}"
+    hurt = f" · −{res['damage']} HP" if res["damage"] else ""
+    if res["kind"] == "monster":
+        verb = "beaten" if res["passed"] else "you got past, wounded"
+        st.session_state.log.append(f"{'⚔️' if res['passed'] else '💥'} {res['name']} — {verb}. {math}{hurt}")
+    else:
+        verb = "passed" if res["passed"] else "failed, but you got through"
+        st.session_state.log.append(
+            f"{'✅' if res['passed'] else '❌'} {res['attribute'].upper()} check {verb}. {math}{hurt}")
+    st.session_state.last_outcome = res
+    if st.session_state.hp <= 0:
+        st.session_state.game_over = True
+
+
 def resolve_choice(choice, story):
+    """Roll for a checked choice. Win or lose, the hero moves on — failure just costs HP."""
     if "condition" not in choice:
         apply_choice_target(choice, story)
         return
-
     cond = choice["condition"]
-    attr       = cond["attribute"]
-    check_val  = cond["check_value"]
-    dice       = cond.get("dice_type", "1d6")
-    fail_dmg   = cond.get("fail_damage", 2)
-
-    bonus, bonus_item = _item_bonus(cond)
-
-    placeholder = st.empty()
-    roll = animate_roll(placeholder, dice)
-    player_val = st.session_state.attributes.get(attr, 0)
-    total = roll + player_val + bonus
-
-    bonus_txt = f"+{bonus}({item_name(story, bonus_item)})" if bonus else ""
-
-    if total >= check_val:
-        st.session_state.log.append(
-            f"✅ {attr.upper()} DC {check_val} — passed! {roll}+{player_val}{bonus_txt}={total}"
-        )
-        apply_choice_target(choice, story)
+    roll = animate_roll(st.empty(), cond.get("dice_type", R.DEFAULT_DICE))
+    res = R.resolve_check(cond, st.session_state.attributes,
+                          st.session_state.get("inventory", []), roll=roll)
+    _record_outcome(res, story)
+    if st.session_state.game_over:
+        return
+    dest, legacy = R.check_destination(choice, res["passed"])
+    if legacy:
+        move_to(dest)            # older story: failure still routed to its old fail_target
     else:
-        st.session_state.log.append(
-            f"❌ {attr.upper()} DC {check_val} — failed. {roll}+{player_val}{bonus_txt}={total}. "
-            f"Lost {fail_dmg} HP."
-        )
-        st.session_state.hp -= fail_dmg
-        if st.session_state.hp <= 0:
-            st.session_state.game_over = True
-        fail_target = choice.get("fail_target") or cond.get("fail_target")
-        if fail_target:
-            st.session_state.current_loc = fail_target
+        apply_choice_target(choice, story)
 
 
 def resolve_combat(monster, loc_id, story):
-    dice     = monster.get("dice_type", "1d6")
-    fail_dmg = monster.get("fail_damage", 4)
-    attr     = monster.get("attribute", "strength")
+    """One roll decides the whole encounter; either way it's over and the path opens."""
+    roll = animate_roll(st.empty(), monster.get("dice_type", R.DEFAULT_DICE))
+    res = R.resolve_monster(monster, st.session_state.attributes, roll=roll)
+    _record_outcome(res, story)
+    st.session_state.locations[loc_id].pop("monster", None)
 
-    placeholder = st.empty()
-    roll = animate_roll(placeholder, dice)
-    attr_val = st.session_state.attributes.get(attr, 0)
-    total   = roll + attr_val
 
-    if total >= monster["strength"]:
-        st.session_state.log.append(
-            f"⚔️ Defeated {monster['name']}! "
-            f"{roll}+{attr.upper()}({attr_val})={total} vs DC {monster['strength']}."
-        )
-        del st.session_state.locations[loc_id]["monster"]
+def render_outcome():
+    """Card showing what just happened on the last roll (success or the injury taken)."""
+    o = st.session_state.get("last_outcome")
+    if not o:
+        return
+    ok = o["passed"]
+    accent = "#6f9a52" if ok else "#b0563f"
+    if o["kind"] == "monster":
+        head = f"⚔️ {o['name']} — {'beaten' if ok else 'you got past, wounded'}"
     else:
-        st.session_state.log.append(
-            f"💥 {monster['name']} wounds you! "
-            f"{roll}+{attr.upper()}({attr_val})={total} vs DC {monster['strength']}. "
-            f"Lost {fail_dmg} HP."
-        )
-        st.session_state.hp -= fail_dmg
-        if st.session_state.hp <= 0:
-            st.session_state.game_over = True
+        head = f"{'✅' if ok else '❌'} {o['attribute'].upper()} check {'passed' if ok else 'failed'}"
+    head += f" · {o['total']} vs DC {o['dc']}" + ("" if ok else f" · −{o['damage']} HP")
+    st.markdown(
+        f"<div style='background:#100d08;border:1px solid #2a2418;border-left:3px solid {accent};"
+        f"border-radius:0 6px 6px 0;padding:0.8rem 1.2rem;margin:0.4rem 0 0.8rem 0'>"
+        f"<div style='color:{accent};font-family:\"Share Tech Mono\",monospace;font-size:0.8rem;"
+        f"letter-spacing:0.5px;margin-bottom:0.35rem'>{head}</div>"
+        f"<div style='color:#d4c5a9;font-family:\"Special Elite\",Georgia,serif;font-size:0.98rem;"
+        f"line-height:1.7'>{o['text']}</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_go_back(story):
+    """Easy mode only: retrace your steps (items stay taken, beaten monsters stay beaten)."""
+    if (story.get("difficulty") or "").lower() != "easy" or not st.session_state.get("history"):
+        return
+    if st.button("↩  Go back", use_container_width=True, key="go_back",
+                 help="Easy mode: return to the previous place and choose another path."):
+        st.session_state.current_loc = st.session_state.history.pop()
+        st.session_state.last_outcome = None
+        st.session_state.log.append("↩ You retrace your steps.")
+        st.rerun()
 
 
 # ── screens ───────────────────────────────────────────────────────────────────
@@ -516,6 +730,8 @@ def show_char_creation(story):
         st.session_state.char_creation_done = True
         st.session_state.pending_choice     = None
         st.session_state.pending_combat     = False
+        st.session_state.history            = []
+        st.session_state.last_outcome       = None
         st.rerun()
 
 
@@ -534,8 +750,7 @@ def show_end_buttons(story):
 
 def go_to_library():
     """Drop the active story/run and return to the gallery."""
-    for k in list(st.session_state.keys()):
-        del st.session_state[k]
+    clear_session()
     st.session_state.screen = "library"
     st.query_params.clear()          # drop ?story= so the library URL stays clean
 
@@ -543,8 +758,7 @@ def go_to_library():
 def select_story(path):
     """Make `path` the active story and begin a fresh run (character creation)."""
     story = load_story_file(path)
-    for k in list(st.session_state.keys()):
-        del st.session_state[k]
+    clear_session()
     st.session_state.active_story      = story
     st.session_state.active_story_path = path
     st.session_state.screen            = "game"
@@ -629,17 +843,26 @@ def show_library():
                 st.rerun()
             with c_share:
                 render_share(f"Play “{s['title']}” — a free choose-your-own-adventure on Quest Book",
-                             story_url(s["path"]), label="🔗")
+                             story_url(s["path"]), label="Share")
 
     st.divider()
+    _btn = ("text-decoration:none;font-family:\"Share Tech Mono\",monospace;font-size:0.85rem;"
+            "border:1px solid #3a2e14;border-radius:4px;padding:0.55rem 1.1rem;background:#161208")
     st.markdown(
         f"<div style='text-align:center;margin:0.3rem 0'>"
-        f"<a href='{KOFI_URL}' target='_blank' style='color:#d4a843;text-decoration:none;"
-        f"font-family:\"Share Tech Mono\",monospace;font-size:0.85rem;border:1px solid #3a2e14;"
-        f"border-radius:4px;padding:0.55rem 1.1rem;background:#161208'>"
-        f"☕  Enjoying the quests? Support Quest Book on Ko-fi</a></div>",
+        f"<div style='color:#6a5a42;font-family:monospace;font-size:0.8rem;margin-bottom:0.7rem'>"
+        f"Enjoying the quests? Help keep them free:</div>"
+        f"<div style='display:flex;gap:0.6rem;justify-content:center;flex-wrap:wrap'>"
+        f"<a href='{KOFI_URL}' target='_blank' rel='noopener' style='color:#d4a843;{_btn}'>"
+        f"☕  Support on Ko-fi</a>"
+        f"<a href='{SPONSORS_URL}' target='_blank' rel='noopener' style='color:#e58bbd;{_btn}'>"
+        f"♥  Sponsor on GitHub</a></div></div>",
         unsafe_allow_html=True,
     )
+    st.write("")
+    _left, mid, _right = st.columns([1, 1, 1])
+    with mid:
+        render_feedback("library")
 
 
 def _push_story_to_git(path):
@@ -666,17 +889,25 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
         models = free_fallback_models()
     else:
         models = [model] + [m for m in gen_models(provider) if m != model]
-    try:
-        ok, path, summary = create_story(theme, difficulty, length, title_hint, api_key,
-                                         provider=provider, models=models, max_attempts=5,
-                                         keep_best=True, language=language,
-                                         language_level=language_level)
-    except ImportError:
-        pkg = PROVIDER_PKG.get(provider, provider)
-        return {"ok": False, "errors": [f"The '{pkg}' Python package isn't installed. "
-                                        f"Install it with:  pip install {pkg}"]}
-    except Exception as e:
-        return {"ok": False, "errors": [f"Generation failed: {e}"]}
+    # Free tier: one generation at a time (Flash models allow only 5 requests/minute), so
+    # simultaneous players queue for up to ~2.5 min instead of tripping the per-minute limit.
+    with Q.generation_slot(timeout=150) as got:
+        if not got:
+            return {"ok": False, "busy": True}
+        Q.record_client(player_id())             # counts toward the per-player daily cap
+        try:
+            ok, path, summary = create_story(theme, difficulty, length, title_hint, api_key,
+                                             provider=provider, models=models, max_attempts=5,
+                                             keep_best=True, language=language,
+                                             language_level=language_level)
+        except ImportError:
+            pkg = PROVIDER_PKG.get(provider, provider)
+            return {"ok": False, "errors": [f"The '{pkg}' Python package isn't installed. "
+                                            f"Install it with:  pip install {pkg}"]}
+        except Exception as e:
+            if "free-tier quota" in str(e):
+                return {"ok": False, "quota_out": True, "resets_in": Q.format_reset()}
+            return {"ok": False, "errors": [f"Generation failed: {e}"]}
 
     # bank this generation's cost against the monthly budget (≈0 when on the free chain)
     if summary and summary.get("cost_usd") is not None:
@@ -704,6 +935,8 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
             reasons.append("coherence (loops or thin opening)")
         if summary and summary.get("balance") != "PASS":
             reasons.append(f"balance ({summary.get('balance')}) for '{difficulty}'")
+        if summary and summary.get("review") == "REVIEW":
+            reasons.append("story continuity (the story review found problems)")
         out = {"ok": False, "draft": True, "path": path, "title": title, "reasons": reasons,
                "pushed": pushed, "push_msg": push_msg,
                "verdict": (summary or {}).get("balance", "—"),
@@ -744,6 +977,23 @@ def show_create_page():
 
     res = st.session_state.get("gen_result")
     if res is not None:
+        if res.get("busy") or res.get("quota_out"):
+            if res.get("busy"):
+                st.warning("Another story is being created right now — the free tier allows one at "
+                           "a time. Please try again in a minute or two.")
+            else:
+                st.warning("Today's free story-creation quota ran out while your story was being "
+                           f"written. New stories can be created again in {res.get('resets_in')} "
+                           "(midnight Pacific). You can still play every story in the library.")
+            c1, c2 = st.columns(2)
+            if c1.button("↩  Try again", use_container_width=True):
+                st.session_state.pop("gen_result", None)
+                st.rerun()
+            if c2.button("📚  Back to library", use_container_width=True):
+                st.session_state.screen = "library"
+                st.session_state.pop("gen_result", None)
+                st.rerun()
+            return
         if res.get("capped_blocked"):
             st.error("✨ New-story creation is paused — this month's generation budget "
                      f"(${res.get('budget', '?')}) is used up and no free backup key is "
@@ -755,7 +1005,9 @@ def show_create_page():
             return
         if res.get("ok"):
             st.success(f"Created **“{res['title']}”** — saved to `{res['path']}`.")
-            st.caption("Passed every gate: validate ✓ · coherence ✓ · balance PASS")
+            _rv = (res.get("gates") or {}).get("review", "off")
+            st.caption("Passed every gate: validate ✓ · coherence ✓ · balance PASS · story review "
+                       + {"OK": "✓", "skipped": "skipped", "off": "off"}.get(_rv, str(_rv)))
             if res.get("capped"):
                 st.info("Made with the **free model** — this month's premium budget is used up.")
             if res.get("cost_usd") is not None:
@@ -805,8 +1057,9 @@ def show_create_page():
         "<div style='background:#141008;border-left:3px solid #8b6914;border-radius:0 6px 6px 0;"
         "padding:1rem 1.3rem;margin:0.4rem 0 1rem;color:#c8b49a;font-size:0.9rem;line-height:1.6'>"
         "Describe a setting and pick a difficulty. The model writes a full branching adventure, then "
-        "it must pass the validate → coherence → balance gates (auto-repairing on failure) before it's "
-        "added to your library — so every story is consistent, well-connected, and ready to play."
+        "it must pass the validate → coherence → balance → story-review gates (auto-repairing on "
+        "failure) before it's added to your library — so every story is consistent, well-connected, "
+        "and ready to play."
         "</div>", unsafe_allow_html=True)
 
     if monthly_budget() > 0:
@@ -846,11 +1099,30 @@ def show_create_page():
         st.info("✨ Story generation is currently unavailable — the site owner hasn't configured "
                 "a generation key yet. You can still play every story in the library.")
 
+    # free-tier capacity: how many more stories today, and this player's share
+    blocked = False
+    if api_key and provider == "google":
+        cap = Q.capacity(gen_models(provider), review_models(provider))
+        used, per_player = Q.client_used(player_id()), Q.stories_per_player()
+        n = cap["stories"]
+        st.caption(f"🔋 Free tier today: about **{n}** new stor{'y' if n == 1 else 'ies'} can still be "
+                   f"created · you've made {used}/{per_player} · resets in {cap['resets_in_text']} "
+                   f"(midnight Pacific)")
+        if n < 1:
+            blocked = True
+            st.warning(f"Today's free story-creation quota is used up — new stories can be created "
+                       f"again in {cap['resets_in_text']}. You can still play every story in the library.")
+        elif used >= per_player:
+            blocked = True
+            st.info(f"You've created {per_player} stories today — that's the daily limit per player, "
+                    f"so everyone gets a turn on the free tier. Come back in {cap['resets_in_text']}.")
+
     if st.button("✨  Generate Story", use_container_width=True,
-                 disabled=not theme.strip() or not api_key):
+                 disabled=not theme.strip() or not api_key or blocked):
         with st.spinner("Summoning a new world… the model writes it, then it must pass the "
-                        "validate → coherence → balance gates (auto-repairing). This can take "
-                        "a couple of minutes."):
+                        "validate → coherence → balance → story-review gates (auto-repairing). "
+                        "This can take a few minutes — and if someone else is creating a story "
+                        "right now, you're next in line."):
             st.session_state.gen_result = _do_generate(
                 theme.strip(), difficulty, length, title_hint.strip(), api_key, provider,
                 model, language.strip() or "English", language_level)
@@ -903,10 +1175,16 @@ def main():
     if st.sidebar.button("📚  Story Library", use_container_width=True, key="side_lib"):
         go_to_library()
         st.rerun()
+    with st.sidebar:
+        render_feedback("game")
     st.sidebar.markdown(
         f"<div style='text-align:center;margin-top:0.5rem'>"
-        f"<a href='{KOFI_URL}' target='_blank' style='color:#9a8a6a;font-size:0.8rem;"
-        f"font-family:monospace;text-decoration:none'>☕ Support on Ko-fi</a></div>",
+        f"<span style='font-size:0.8rem;font-family:monospace'>"
+        f"<a href='{KOFI_URL}' target='_blank' rel='noopener' "
+        f"style='color:#9a8a6a;text-decoration:none'>☕ Ko-fi</a>"
+        f"<span style='color:#4a3e2a'>  ·  </span>"
+        f"<a href='{SPONSORS_URL}' target='_blank' rel='noopener' "
+        f"style='color:#9a8a6a;text-decoration:none'>♥ GitHub Sponsors</a></span></div>",
         unsafe_allow_html=True,
     )
 
@@ -918,8 +1196,10 @@ def main():
     st.caption(f"🌍 {story['theme']}")
 
     if st.session_state.game_over:
+        render_outcome()                      # the blow that ended the run
         st.error("💀  GAME OVER — Your journey ends in the dust.")
         render_result_share(story, victory=False)
+        render_rate_story(story)
         show_end_buttons(story)
         return
 
@@ -947,6 +1227,9 @@ def main():
     cols[3].metric("🫁 STA", st.session_state.attributes["stamina"])
 
     st.divider()
+
+    # ── outcome of the last roll (what happened on the way here) ─────────────
+    render_outcome()
 
     # ── location description ──────────────────────────────────────────────────
     st.markdown(
@@ -988,7 +1271,8 @@ def main():
             extra = f" +{bonus} {item_name(story, bonus_item)}" if bonus else ""
             label = (
                 f"**{attr.upper()} check** — beat DC **{dc}** "
-                f"(you roll {dice}{extra}+{attr_val}) · **{odds}** · *fail costs {fail} HP*"
+                f"(you roll {dice}{extra}+{attr_val}) · **{odds}** · "
+                f"*fail: you still get through, but lose {fail} HP*"
             )
         else:
             monster = curr_loc["monster"]
@@ -999,8 +1283,8 @@ def main():
             attr_val = st.session_state.attributes.get(attr, 0)
             odds    = odds_label(dice, dc, attr_val)
             label   = (
-                f"**{attr.upper()} check** — beat DC **{dc}** "
-                f"· **{odds}** · *fail costs {fail} HP*"
+                f"**{attr.upper()} vs {monster['name']}** — beat DC **{dc}** "
+                f"· **{odds}** · *lose: you still get past, but lose {fail} HP*"
             )
 
         st.markdown(
@@ -1039,15 +1323,17 @@ def main():
         c1.metric("Your HP",          f"{st.session_state.hp}/{max_hp}")
         c2.metric(f"Enemy {m_attr.upper()} DC", monster["strength"])
         c3.metric("Your odds",        odds)
-        st.caption(f"Failure costs **{monster.get('fail_damage', 4)} HP**. You may retry.")
+        st.caption(f"One roll decides it: win and you're through cleanly — lose and you still get "
+                   f"past, but it costs **{monster.get('fail_damage', R.DEFAULT_MONSTER_DAMAGE)} HP**.")
 
         if st.button(f"⚔️  Fight {monster['name']}", use_container_width=True):
+            st.session_state.last_outcome = None
             st.session_state.pending_combat = True
             st.rerun()
 
         flee = [c for c in curr_loc.get("choices", []) if c.get("is_flee")]
         if flee:
-            st.caption("*Or flee:*")
+            st.caption("*Or try another way:*")
             for c in flee:
                 lbl = c["text"]
                 if "condition" in c:
@@ -1057,21 +1343,23 @@ def main():
                     lbl += (f"  [{cc['attribute'].upper()} DC {cc['check_value']} · "
                             f"{odds_label(cc.get('dice_type','1d6'), cc['check_value'], fa, b)}]")
                 if st.button(lbl, key=f"flee_{c['text']}"):
-                    if "condition" in c:
-                        st.session_state.pending_choice = c
-                    else:
-                        apply_choice_target(c, story)
+                    take_choice(c, story)
                     st.rerun()
+        render_go_back(story)
         return
 
     # ── ending ────────────────────────────────────────────────────────────────
     if curr_loc.get("is_end"):
         if curr_loc.get("is_victory", True):
-            st.balloons()
+            if not st.session_state.get("celebrated"):     # once per run, not on every rerun
+                st.balloons()
+                st.session_state.celebrated = True
             st.success("🎉  **VICTORY!** Your journey is complete.")
         else:
             st.error("💀  Your story ends here.")
+            render_go_back(story)                  # easy mode: undo the fatal decision
         render_result_share(story, victory=curr_loc.get("is_victory", True))
+        render_rate_story(story)
         show_end_buttons(story)
         return
 
@@ -1119,11 +1407,10 @@ def main():
             lbl += f"  [requires {items_def.get(req, {}).get('icon','📦')} {items_def.get(req, {}).get('name', req)}]"
 
         if st.button(lbl, key=choice["text"]):
-            if "condition" in choice:
-                st.session_state.pending_choice = choice
-            else:
-                apply_choice_target(choice, story)
+            take_choice(choice, story)
             st.rerun()
+
+    render_go_back(story)
 
 
 if __name__ == "__main__":

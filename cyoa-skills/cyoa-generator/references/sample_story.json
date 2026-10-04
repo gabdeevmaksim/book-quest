@@ -47,7 +47,9 @@
             "attribute": "strength",
             "check_value": 7,
             "dice_type": "1d6",
-            "fail_damage": 3
+            "fail_damage": 3,
+            "success_text": "The grille shrieks, bends and gives; you squeeze through into the cold air of the reliquary.",
+            "fail_text": "The grille tears loose all at once and you pitch through after it, wrenching your shoulder on the iron."
           }
         }
       ]
@@ -77,7 +79,9 @@
         "strength": 9,
         "fail_damage": 6,
         "dice_type": "1d6",
-        "attribute": "strength"
+        "attribute": "strength",
+        "success_text": "Your shoulder crashes into its spine and the Sentinel bursts apart into a rain of loose bones.",
+        "fail_text": "A bony fist slams into your ribs before the Sentinel topples — you stagger past it, every breath a stab."
       },
       "choices": [
         {
@@ -93,7 +97,9 @@
             "attribute": "agility",
             "check_value": 9,
             "dice_type": "1d6",
-            "fail_damage": 6
+            "fail_damage": 4,
+            "success_text": "You kick the cracked pillar out and dart beneath the falling stone; it buries the Sentinel and you slip through.",
+            "fail_text": "The pillar comes down faster than you planned — a chunk of masonry clips your back as you dive clear into the reliquary."
           }
         },
         {
@@ -120,7 +126,9 @@
             "item_bonus": {
               "item": "charm",
               "bonus": 3
-            }
+            },
+            "success_text": "Your fingers find the key wedged between the saint's ribs and slide it free without a sound.",
+            "fail_text": "The lid shifts and pins your fingers against the stone — you wrench the key free, knuckles skinned and throbbing."
           },
           "gives_item": "iron_key"
         },
@@ -150,8 +158,16 @@
       "is_end": false,
       "choices": [
         {
-          "text": "Take the relic and climb to the surface",
-          "target_id": "relic_ending"
+          "text": "Take the relic and climb the narrow flue to the surface",
+          "target_id": "relic_ending",
+          "condition": {
+            "attribute": "stamina",
+            "check_value": 8,
+            "dice_type": "1d6",
+            "fail_damage": 3,
+            "success_text": "Braced back and feet against the flue, you inch upward until grey light spills over your face.",
+            "fail_text": "Halfway up your legs start to shake; you slip, scrape your back raw on the stone, and grind on to the top."
+          }
         }
       ]
     },
@@ -166,8 +182,9 @@
             "attribute": "stamina",
             "check_value": 9,
             "dice_type": "1d6",
-            "fail_damage": 5,
-            "fail_target": "undertow"
+            "fail_damage": 4,
+            "success_text": "Chest-deep and shivering, you force your way across and haul yourself onto the far steps.",
+            "fail_text": "The floor drops away and the undertow rolls you through black water — you come up against the far steps choking, half-drowned."
           }
         },
         {
@@ -177,7 +194,9 @@
             "attribute": "agility",
             "check_value": 8,
             "dice_type": "1d6",
-            "fail_damage": 4
+            "fail_damage": 3,
+            "success_text": "Palms flat to the stone, you inch along the ledge and step down safely on the far side.",
+            "fail_text": "Your boot skids off the slick stone and you slam a knee into the ledge before you catch yourself and limp on."
           }
         },
         {
@@ -187,28 +206,10 @@
             "attribute": "stamina",
             "check_value": 10,
             "dice_type": "1d6",
-            "fail_damage": 6
+            "fail_damage": 5,
+            "success_text": "You kick down through the black water and surface in a hidden vault, gold glinting in the silt.",
+            "fail_text": "The cold steals your breath halfway down; you surface in the vault coughing water, ears ringing."
           }
-        }
-      ]
-    },
-    "undertow": {
-      "description": "The floor drops away and the current takes you, rolling you through black water until you no longer know which way is up. Your lungs burn. Then your hand strikes a grate, and a sliver of dim light.",
-      "is_end": false,
-      "choices": [
-        {
-          "text": "Kick hard for the surface",
-          "target_id": "sealed_well",
-          "condition": {
-            "attribute": "stamina",
-            "check_value": 6,
-            "dice_type": "1d6",
-            "fail_damage": 4
-          }
-        },
-        {
-          "text": "Let the current carry you to the side grate",
-          "target_id": "sealed_well"
         }
       ]
     },
@@ -223,7 +224,9 @@
             "attribute": "stamina",
             "check_value": 7,
             "dice_type": "1d6",
-            "fail_damage": 4
+            "fail_damage": 3,
+            "success_text": "Rung by rung you climb toward the coin of daylight above.",
+            "fail_text": "A rusted rung snaps under your weight; you slide back, palms torn, then find a hold and climb on."
           }
         }
       ]
@@ -241,10 +244,16 @@
       "choices": []
     },
     "sunken_vault": {
-      "description": "Your fingers close on the gold — a fat handful of old coin — just as the silt-choked passage folds shut behind you. The water is rising, the only light is the glint in your fist, and the whispering has started again, much closer now. The catacombs have their offering.",
-      "is_end": true,
-      "is_victory": false,
-      "choices": []
+      "description": "Your fingers close on the gold — a fat handful of old coin — as the silt-choked passage behind you folds shut. For a moment there is only black water and the glint in your fist. Then you see it: a crack in the vault wall, and above it a faint grey sliver of daylight.",
+      "is_end": false,
+      "choices": [
+        {
+          "text": "Squeeze up through the crack toward the daylight",
+          "target_id": "sealed_well"
+        }
+      ]
     }
-  }
+  },
+  "language": "English",
+  "language_level": "C2"
 }

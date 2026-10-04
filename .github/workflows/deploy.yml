@@ -37,7 +37,7 @@ jobs:
         run: pip install -r requirements.txt pytest
 
       - name: Byte-compile
-        run: python -m py_compile app.py story_engine.py story_agent.py playtest.py compare_models.py
+        run: python -m py_compile app.py story_engine.py story_agent.py playtest.py compare_models.py feedback.py game_rules.py narrative_review.py quota.py scripts/regenerate_library.py
 
       - name: Run tests
         run: python -m pytest -q tests

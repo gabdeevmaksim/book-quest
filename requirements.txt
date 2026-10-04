@@ -2,3 +2,4 @@ streamlit
 google-genai
 anthropic
 boto3
+tzdata

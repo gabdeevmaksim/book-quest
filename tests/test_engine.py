@@ -12,10 +12,26 @@ def isolated_ledger(tmp_path, monkeypatch):
     monkeypatch.setenv("QUEST_MONTHLY_BUDGET_USD", "5")
 
 
-def test_pricing():
+def test_pricing(monkeypatch):
     assert E.estimate_cost("claude-sonnet-4-6", 1_000_000, 1_000_000) == pytest.approx(18.0)
     assert E.estimate_cost("gemini-2.5-flash", 1_000_000, 1_000_000) == 0.0   # free backup
     assert E.estimate_cost("unknown-model", 1_000_000, 1_000_000) == 0.0
+    monkeypatch.delenv("QUEST_GOOGLE_TIER", raising=False)                      # default: free tier
+    assert E.estimate_cost("gemini-3.8-flash", 1_000_000, 1_000_000) == 0.0
+    monkeypatch.setenv("QUEST_GOOGLE_TIER", "paid")
+    assert E.estimate_cost("gemini-3.8-flash", 1_000_000, 1_000_000) == pytest.approx(4.5)
+
+
+def test_default_chains_are_free_gemini(monkeypatch):
+    for v in ("QUEST_GEN_MODELS", "QUEST_GEN_MODEL", "QUEST_REVIEW_MODELS"):
+        monkeypatch.delenv(v, raising=False)
+    writers, reviewers = E.gen_models("google"), E.review_models("google")
+    assert writers[0] == "gemini-3.8-flash"
+    assert all(m.endswith("-lite") for m in reviewers)                 # reviews use Flash Lite (500/day)
+    assert not any(m.endswith("-lite") for m in writers)               # so they never eat writing quota
+    assert all(m.startswith("gemini") and "pro" not in m for m in writers + reviewers)
+    import quota as Q
+    assert all(Q.tracked(m) for m in writers + reviewers)              # every default has a known limit
 
 
 def test_budget_cap_and_monthly_rollover():
@@ -45,7 +61,7 @@ def test_create_story_attaches_usage(monkeypatch, tmp_path):
              '"is_end":true,"is_victory":true,"choices":[]}}}')
     out = tmp_path / "t.json"
     ok, path, summary = E.create_story("theme", "normal", api_key="x", out_path=str(out),
-                                       model_call=lambda system, messages: story)
+                                       model_call=lambda system, messages: story, review=False)
     assert ok and path == str(out) and out.exists()
     for key in ("cost_usd", "tokens_in", "tokens_out", "attempts", "model_used"):
         assert key in summary

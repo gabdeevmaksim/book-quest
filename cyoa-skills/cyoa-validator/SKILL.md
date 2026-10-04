@@ -28,7 +28,10 @@ Check correctness (links, reachability, can-reach-an-ending):
 python3 scripts/validate_story.py story.json
 ```
 
-Check connectivity & pre-history (flags chaotic/disconnected maps and thin openings):
+Check connectivity & pre-history (flags chaotic/disconnected maps and thin openings) and the
+challenge rules (every check/monster has `success_text` + `fail_text`, no retired
+`fail_target`, the right number of hinted dead ends for the difficulty, each hint present in
+the scene text):
 ```bash
 python3 scripts/coherence_report.py story.json
 ```

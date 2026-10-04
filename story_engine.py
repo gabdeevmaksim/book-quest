@@ -22,6 +22,10 @@ import time
 import glob
 import tempfile
 import subprocess
+
+import game_rules as R   # shared challenge rules (dead-end counts per difficulty, ...)
+import narrative_review as NR   # the story-review agent (4th gate: continuity)
+import quota as Q               # free-tier rate limits: per-model RPM/TPM/RPD tracking
 from functools import lru_cache
 
 def _load_dotenv(path=".env"):
@@ -55,11 +59,15 @@ GENERATOR_SPEC = os.path.join("cyoa-skills", "cyoa-generator", "SKILL.md")
 DIFFICULTIES   = ["easy", "normal", "hard"]
 GEN_MAX_TOKENS = 16000
 
-DEFAULT_MODELS = {"google": "gemini-3.5-flash", "anthropic": "claude-sonnet-4-6"}
+DEFAULT_MODELS = {"google": "gemini-3.8-flash", "anthropic": "claude-sonnet-4-6"}
 # Fallback chains: if a model hits its (free-tier) limit, the agent advances to the next one.
 # Override with QUEST_GEN_MODELS="m1,m2,..." or pin a single one with QUEST_GEN_MODEL="m".
+# Google defaults are all on the Gemini API FREE tier (Pro models are paid-only). Each Flash
+# model has its own 20 requests/day, so writing rotates through all of them (≈120/day);
+# quota.py skips a model once its day is used up. Reviewing uses the Flash Lite models.
 DEFAULT_MODEL_CHAINS = {
-    "google":    ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    "google":    ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash",
+                  "gemini-3.5-flash", "gemini-3-flash", "gemini-2.5-flash"],
     "anthropic": ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
 }
 PROVIDER_LABEL = {"google": "Google (Gemini)", "anthropic": "Anthropic (Claude)"}
@@ -73,6 +81,7 @@ MODEL_PRICING = {
     "claude-opus-4-8":           (5.0, 25.0),
     "claude-sonnet-4-6":         (3.0, 15.0),
     "claude-haiku-4-5-20251001": (1.0,  5.0),
+    "gemini-3.8-flash":          (0.75, 3.75),  # paid price through 2026 (doubles Jan 2027)
     "gemini-3.5-flash":          (1.5,  9.0),
     "gemini-3.1-pro":            (2.0, 12.0),
     "gemini-2.5-flash":          (0.0,  0.0),   # free-tier backup
@@ -80,8 +89,16 @@ MODEL_PRICING = {
 }
 
 
+def google_tier():
+    """'free' (default) or 'paid' — whether the Google key's project has billing enabled.
+    On the free tier every Gemini call costs $0, so the budget ledger counts nothing for it."""
+    return "paid" if os.environ.get("QUEST_GOOGLE_TIER", "free").strip().lower() == "paid" else "free"
+
+
 def estimate_cost(model, input_tokens, output_tokens):
-    """Estimated USD cost of one call. Unknown models are treated as free (0.0)."""
+    """Estimated USD cost of one call. Unknown models — and Gemini on the free tier — are $0."""
+    if str(model).startswith("gemini") and google_tier() == "free":
+        return 0.0
     pin, pout = MODEL_PRICING.get(model, (0.0, 0.0))
     return (int(input_tokens or 0) / 1_000_000) * pin + (int(output_tokens or 0) / 1_000_000) * pout
 
@@ -481,6 +498,10 @@ def call_model(provider, model, system, messages, api_key, usage_sink=None):
                                "cost_usd": estimate_cost(model, tin, tout)})
 
     for attempt in range(max_retries + 1):
+        if Q.tracked(model):                     # free-tier budget: count it, wait, or skip
+            ok, why = Q.reserve(model, Q.estimate_tokens(system, messages))
+            if not ok:
+                raise Q.QuotaSkip(why)
         try:
             if provider == "anthropic":
                 import anthropic
@@ -512,6 +533,10 @@ def call_model(provider, model, system, messages, api_key, usage_sink=None):
             _record(getattr(um, "prompt_token_count", 0), getattr(um, "candidates_token_count", 0))
             return resp.text or ""
         except Exception as e:
+            if Q.tracked(model):
+                Q.note_error(model, str(e))      # learn daily / per-minute limits, missing models
+                if any(k in str(e) for k in ("429", "RESOURCE_EXHAUSTED", "404", "NOT_FOUND")):
+                    raise                        # don't burn more quota retrying — next model
             if attempt < max_retries and any(k in str(e) for k in retryable):
                 time.sleep(delay)
                 delay *= 2
@@ -522,17 +547,22 @@ def call_model(provider, model, system, messages, api_key, usage_sink=None):
 def call_with_fallback(provider, models, system, messages, api_key, log=None, usage_sink=None):
     """Try each model in order; on ANY failure advance to the next one. This is what makes the
     agent survive free-tier limits: when a model's quota is exhausted (or it's unavailable), the
-    next model in the chain takes over. Returns (text, model_used); raises only if all models fail."""
-    errors = []
+    next model in the chain takes over — models whose free-tier day is already used up are
+    skipped without a call (quota.py). Returns (text, model_used); raises only if all fail."""
+    errors, skipped = [], 0
     for i, model in enumerate(models):
         try:
             return call_model(provider, model, system, messages, api_key, usage_sink=usage_sink), model
         except Exception as e:
+            skipped += isinstance(e, Q.QuotaSkip)
             errors.append(f"{model}: {str(e)[:200]}")
             if i < len(models) - 1:
                 if log:
                     log(f"    ! {model} unavailable ({str(e)[:70]}…) — switching to {models[i + 1]}")
                 continue
+            if skipped == len(models):
+                raise RuntimeError(f"free-tier quota for today is used up on every model "
+                                   f"({', '.join(models)}); it resets in {Q.format_reset()}") from e
             raise RuntimeError("all configured models failed:\n  " + "\n  ".join(errors)) from e
     raise RuntimeError("no models configured")
 
@@ -573,11 +603,26 @@ def build_prompts(theme, difficulty, length, title_hint="", language="English", 
         "ONLY the JSON object — no prose, no markdown, no code fences.\n\n"
         "=== SPECIFICATION ===\n" + spec
     )
+    lo, hi = R.trap_band(difficulty, length)
+    if hi == 0:
+        endings = "3-5 endings (they can all be victories of different kinds)"
+        dead_ends = ("DEAD ENDS: none — this is an easy story. Every location must still be able to "
+                     "reach a victory, and no choice may carry trap_hint.\n")
+    else:
+        want = f"exactly {lo}" if lo == hi else f"{lo}-{hi}"
+        endings = "3-5 endings, including the non-victory endings of the dead-end branches"
+        dead_ends = (
+            f"DEAD ENDS: include {want} hinted dead-end branch(es). Each starts with a choice that "
+            f'carries "trap_hint": a phrase copied VERBATIM from that location\'s description which '
+            f"foreshadows the danger; the branch is played out over 2-3 locations and ends in an "
+            f"is_victory:false ending, and nothing in it leads back to a victory. Apart from these, "
+            f"every location must be able to reach a victory, and no ordinary choice may jump "
+            f"straight to a bad ending.\n")
+    stakes = {"easy": "3-5", "normal": "5-7", "hard": "7-9"}.get((difficulty or "").lower(), "5-7")
     user = (
         f"Theme: {theme}\n"
         f"Difficulty: {difficulty}\n"
-        f"Target size: about {length} locations, with 3-5 endings (include at least one "
-        f"non-victory ending using is_victory:false).\n"
+        f"Target size: about {length} locations, with {endings}.\n"
         + (f'Preferred title: "{title_hint}"\n' if title_hint else "")
         + _language_clause(language, language_level)
         + f'Set the top-level "difficulty" field to "{difficulty}" and tune health, check DCs, '
@@ -586,8 +631,18 @@ def build_prompts(theme, difficulty, length, title_hint="", language="English", 
           "inciting incident, and the stakes). Design a COHERENT, connected map — regions that "
           "link logically, no random teleports, no set of rooms the player can circle at zero "
           "cost, and most choices moving the story FORWARD. Every location must be reachable and "
-          "able to reach an ending; no dead items; no zero-cost infinite-retry checks; give every "
-          "monster a flee or alternate route.\n"
+          "able to reach an ending; no dead items.\n"
+        + "CHALLENGES: every check and monster is resolved by ONE roll and is always passable — on "
+          "a failure the hero still continues to the same destination but loses fail_damage HP. "
+          "Never use fail_target. Give EVERY condition and EVERY monster a success_text and a "
+          "realistic fail_text (in the story language) describing the injury that matches the "
+          "approach — forcing a door hurts a shoulder, squeezing through a splintered gap cuts an "
+          "arm, outlasting something leaves you exhausted. Offer different approaches to an "
+          "obstacle as separate choices with different attributes. Every monster location needs at "
+          "least one non-flee onward choice.\n"
+        + f"STAKES: every route from the start to a victory must pass through {stakes} challenges "
+          f"(checks or monsters); free choices must not let a careful player bypass all the danger.\n"
+        + dead_ends
         + "BRANCHING: most non-ending locations need 2-3 meaningful choices; never chain more "
           "than 2-3 single-choice locations in a row (a corridor fails the coherence gate).\n"
         + "ITEMS: every item must be introduced in the narrative — mention the object in the "
@@ -624,6 +679,57 @@ def generate_story_api(theme, difficulty, length, title_hint, api_key, provider,
 
 
 # ── the full gated pipeline (shared by the app's Create page AND story_agent.py) ──
+# ── 4th gate: the story-review agent (narrative_review.py) ────────────────────
+# A cheap model reads the whole story and flags continuity problems. It runs only after the
+# three free gates pass, so no money is spent reviewing a structurally broken draft.
+#   QUEST_REVIEW=0                     turn the review gate off
+#   QUEST_REVIEW_PROVIDER              google | anthropic (default: the generation provider)
+#   QUEST_REVIEW_MODELS="m1,m2"        reviewer chain (default: a cheap model per provider)
+DEFAULT_REVIEW_MODELS = {
+    # Flash Lite: checking needs reading, not writing — and Lite has 500 requests/day (vs 20 for
+    # Flash), so reviews never eat the writers' daily budget
+    "google":    ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"],
+    "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6"],
+}
+
+
+def review_enabled():
+    return os.environ.get("QUEST_REVIEW", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def review_provider(default=None):
+    p = os.environ.get("QUEST_REVIEW_PROVIDER", "").strip().lower()
+    if p in ("google", "gemini"):
+        return "google"
+    if p in ("anthropic", "claude"):
+        return "anthropic"
+    return default or gen_provider()
+
+
+def review_models(provider):
+    chain = os.environ.get("QUEST_REVIEW_MODELS", "").strip()
+    if chain:
+        return [m.strip() for m in chain.split(",") if m.strip()]
+    return list(DEFAULT_REVIEW_MODELS.get(provider, []))
+
+
+def run_review(story, provider=None, usage_sink=None, log=None, call=None):
+    """Review a story dict for continuity. Returns narrative_review's result dict
+    (status OK | REVIEW | skipped). `call(system, messages) -> text` is injectable for tests."""
+    if call is None:
+        provider = review_provider(provider)
+        models, key = review_models(provider), env_api_key(provider)
+        if not key or not models:
+            return {"status": "skipped", "issues": [], "majors": 0, "minors": 0,
+                    "detail": f"no {provider} key/model for the review"}
+
+        def call(system, messages):
+            text, _used = call_with_fallback(provider, models, system, messages, key,
+                                             log=log, usage_sink=usage_sink)
+            return text
+    return NR.review_story(story, call, log)
+
+
 def gate_report(path, difficulty):
     """Run ALL three gates on a story file. Returns (all_ok, feedback_lines, summary_dict)."""
     story = load_story_file(path)
@@ -643,11 +749,32 @@ def gate_report(path, difficulty):
     return ok, feedback, summary
 
 
-def create_story(theme, difficulty, length=14, title="", api_key=None, provider=None,
-                 models=None, out_path=None, max_attempts=6, model_call=None, log=None,
-                 keep_best=False, language="English", language_level="C2"):
-    """Draft a story and iterate draft → validate → coherence → balance until EVERY gate passes,
-    then save it. Returns (ok, saved_path_or_None, summary).
+def create_story(*args, **kwargs):
+    """Draft a story and iterate draft → validate → coherence → balance → story review until
+    every gate passes, then save it — see _create_story for the arguments and return value.
+    Also records how many writer/review calls the run took (quota.py uses the average to tell
+    players how many more stories today's free tier allows)."""
+    stats = {"writer": 0, "review": 0}
+    try:
+        return _create_story(*args, _stats=stats, **kwargs)
+    finally:
+        if kwargs.get("model_call") is None and (stats["writer"] or stats["review"]):
+            try:
+                Q.record_run(stats["writer"], stats["review"])
+            except Exception:
+                pass
+
+
+def _create_story(theme, difficulty, length=14, title="", api_key=None, provider=None,
+                  models=None, out_path=None, max_attempts=6, model_call=None, log=None,
+                  keep_best=False, language="English", language_level="C2",
+                  review=None, review_call=None, _stats=None):
+    """Draft a story and iterate draft → validate → coherence → balance → story review until
+    EVERY gate passes, then save it. Returns (ok, saved_path_or_None, summary).
+
+    The review gate (narrative_review.py) runs only once the three free gates pass; its major
+    findings go back into the repair loop. `review=None` follows QUEST_REVIEW (on by default);
+    `review_call(system, messages) -> text` is injectable for tests.
 
     On full success a clean story is saved and ok=True. If no attempt passes within the budget
     (or every model hits its free-tier limit) and `keep_best=True`, the best draft so far is
@@ -670,8 +797,11 @@ def create_story(theme, difficulty, length=14, title="", api_key=None, provider=
                                              log=log, usage_sink=usage)
             return text
 
+    do_review = review_enabled() if review is None else bool(review)
+
     def _score(s):
-        return int(s["correctness"]) + int(s["coherence"]) + int(s["balance"] == "PASS")
+        return (int(s["correctness"]) + int(s["coherence"]) + int(s["balance"] == "PASS")
+                + int(s.get("review") in ("OK", "skipped", "off")))
 
     def _attach_usage(summary):
         """Merge accumulated token/cost totals into a returned summary dict."""
@@ -691,6 +821,8 @@ def create_story(theme, difficulty, length=14, title="", api_key=None, provider=
     try:
         for attempt in range(1, max_attempts + 1):
             log(f"[{attempt}/{max_attempts}] drafting …")
+            if _stats is not None:
+                _stats["writer"] += 1
             try:
                 text = model_call(system, messages)
             except Exception as e:               # model/provider unavailable (e.g. all limits hit)
@@ -705,10 +837,21 @@ def create_story(theme, difficulty, length=14, title="", api_key=None, provider=
                 continue
             save_story_file(story, tmp)
             ok, feedback, summary = gate_report(tmp, difficulty)
-            if best is None or _score(summary) >= best[0]:
-                best = (_score(summary), story, summary)
+            summary["review"] = "off" if not do_review else "not run"
             log(f"    validate:{'OK' if summary['correctness'] else 'FAIL'}  "
                 f"coherence:{'OK' if summary['coherence'] else 'REVIEW'}  balance:{summary['balance']}")
+            if ok and do_review:                     # 4th gate — only for otherwise-green drafts
+                if _stats is not None:
+                    _stats["review"] += 1
+                rv = run_review(story, provider=provider, usage_sink=usage, log=log, call=review_call)
+                summary["review"], summary["review_issues"] = rv["status"], rv["issues"]
+                log(f"    story review:{rv['status']} ({rv['detail']})")
+                if rv["status"] == "REVIEW":
+                    ok = False
+                    feedback = ["NARRATIVE — the story review found continuity problems; fix every "
+                                "major one (and the minor ones if easy): " + " | ".join(NR.feedback_lines(rv))]
+            if best is None or _score(summary) >= best[0]:
+                best = (_score(summary), story, summary)
             if ok:
                 final = out_path or unique_story_path(story.get("title") or theme)
                 save_story_file(story, final)
@@ -729,7 +872,7 @@ def create_story(theme, difficulty, length=14, title="", api_key=None, provider=
         _, story, summary = best
         draft = dict(story)
         draft["draft"] = True
-        draft["gate_summary"] = {k: summary[k] for k in ("correctness", "coherence", "balance")}
+        draft["gate_summary"] = {k: summary.get(k) for k in ("correctness", "coherence", "balance", "review")}
         path = out_path or unique_story_path((story.get("title") or theme) + " draft")
         save_story_file(draft, path)
         log(f"    saved best draft to {path} (did not pass all gates)")

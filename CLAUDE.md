@@ -59,7 +59,11 @@ the steps are:
    ```bash
    python3 playtest.py stories/<slug>.json [easy|normal|hard]
    ```
-5. **Play** – launch the app; the gallery auto-discovers every `stories/*.json`.
+5. **Story review** (continuity; one cheap model call — needs a model key):
+   ```bash
+   python3 narrative_review.py stories/<slug>.json
+   ```
+6. **Play** – launch the app; the gallery auto-discovers every `stories/*.json`.
 
 ## Architecture
 
@@ -84,14 +88,37 @@ items { id: { name, icon, description, use?:{heal:N} } },
 start_location_id,
 locations { id: {
   description, is_end, is_victory?, loot?:[item],
-  monster?: { name, strength(=DC), fail_damage, dice_type?, attribute? },
+  monster?: { name, strength(=DC), fail_damage, dice_type?, attribute?,
+              success_text, fail_text },
   choices: [ {
     text, target_id, is_flee?, requires_item?, gives_item?, heals?, consumes_item?,
-    condition?: { attribute, check_value, dice_type, fail_damage, fail_target?,
-                  item_bonus?:{item,bonus} }
+    trap_hint?,              # entrance to a hinted dead-end branch (phrase from the description)
+    condition?: { attribute, check_value, dice_type, fail_damage,
+                  success_text, fail_text, item_bonus?:{item,bonus},
+                  fail_target? }   # LEGACY only — honoured for old stories, flagged for new ones
   } ]
 } }
 ```
+
+**`game_rules.py`** — the single source of truth for challenge mechanics, imported by both
+`app.py` and `playtest.py` (so the simulator can't drift from the game): one-roll checks and
+monsters, fail-forward damage, outcome texts (with defaults for old stories), item bonuses,
+odds, legacy `fail_target`, and `trap_band(difficulty, n_locations)` (dead ends per story).
+
+**`narrative_review.py`** — the story-review agent (4th gate). One cheap-model call reads a
+compact outline of the whole story (scenes, "reached from" paths, outcome texts, trap markers)
+and returns JSON issues — transition, outcome, introduced-before-used, contradiction, ending —
+each `major`/`minor`. Any major fails the gate. `story_engine.create_story` runs it only after
+validate/coherence/balance pass and feeds majors into the repair loop; its cost goes into the
+usage/budget ledger; an API failure or unreadable reply → `skipped` (never blocks). Config:
+`QUEST_REVIEW=0` (off), `QUEST_REVIEW_PROVIDER`, `QUEST_REVIEW_MODELS` (default Haiku 4.5 /
+Gemini 2.5 Flash). CLI: `python3 narrative_review.py stories/<slug>.json`;
+`story_agent.py --audit X.json --review`.
+
+**`scripts/regenerate_library.py`** — rebuilds library stories under the current rules with
+the same title/theme/difficulty/language/filename via `create_story`; archives the old version
+to `stories/_archive/` (gitignored) and keeps it if the new one fails a gate. Run on the droplet:
+`docker compose exec quest-book python3 scripts/regenerate_library.py [--dry-run] [--push]`.
 
 **`cyoa-skills/`** — Claude skills (`.skill` files are zip archives of these dirs):
 - `cyoa-generator`: the authoritative story-generation spec (schema, design rules, difficulty
@@ -108,8 +135,20 @@ locations { id: {
 **`.claude/agents/story-smith.md`** — orchestrator subagent that runs the whole pipeline
 (draft → validate → coherence → balance) with a repair loop; also audits/repairs existing stories.
 
+**`feedback.py`** — Streamlit-free player feedback: `submit()` appends to `state/feedback.jsonl`
+and notifies the owner on Telegram (`QUEST_TG_BOT_TOKEN` + `QUEST_TG_CHAT_ID`; hourly cap
+`QUEST_FEEDBACK_NOTIFY_PER_HOUR`); never raises. `python3 feedback.py` lists entries. In
+`app.py`: a "Send feedback" popover (library footer + game sidebar) and an end-screen star
+rating; game context is attached; per-session cooldown/cap kept in `fbmeta_*` session keys,
+which `clear_session()` preserves across navigation.
+
+**`.streamlit/config.toml`** — dark theme in the app's colours (amber primary), so native
+widgets match the hand-styled CSS in `app.py`.
+
 **`playtest.py`** — Monte-Carlo balance harness. `python3 playtest.py <story> [difficulty]`
 runs 20k playthroughs across random/cautious/heroic policies and prints a difficulty verdict.
+Resolves challenges through `game_rules.py`; the cautious player heeds trap hints, the heroic
+one ignores them. Importable: `simulate(story, n)` / `analyze(story, difficulty)`.
 
 **`story_engine.py`** — Streamlit-free core shared by `app.py` and `story_agent.py`: provider
 config, the model call with retry/backoff + **`call_with_fallback`** (advances down a model chain
@@ -129,10 +168,22 @@ an existing story without generating.
 
 - A story is loaded into `st.session_state.active_story` when selected; `locations` is a
   deepcopy, so combat mutations don't touch the file on disk.
-- Monsters are removed from `st.session_state.locations` after defeat. During an encounter
-  only the Fight button and `is_flee` choices show; non-flee choices appear post-defeat.
-- Attribute checks: `dice_roll + attribute (+ item_bonus) >= check_value`; failure costs
-  `condition.fail_damage` (default 2). Combat: `dice_roll + attribute >= monster.strength`.
+- **Every challenge is passable (fail-forward).** Attribute checks:
+  `dice_roll + attribute (+ item_bonus) >= check_value`. Success → through cleanly; failure →
+  the hero STILL continues to `target_id` (and gets the choice's items) but loses
+  `condition.fail_damage` (default 2). A run only ends early at HP 0 (or in a bad ending).
+  The matching `success_text`/`fail_text` is shown in an outcome card after the roll
+  (`st.session_state.last_outcome`).
+- **Monsters are one roll** (`dice_roll + attribute >= monster.strength`): won or lost, the
+  encounter is over and the monster is removed from `st.session_state.locations`; then the
+  location's non-flee choices appear. During the encounter only Fight and `is_flee`
+  (alternative approach) choices show. Every monster location needs a non-flee choice.
+- **Dead ends**: choices with `trap_hint` lead into hinted, played-out dead-end branches —
+  easy 0, normal 1 (1–2 above 14 locations), hard 2–4 (`game_rules.trap_band`); enforced by
+  the coherence gate along with outcome texts. **Easy** mode has a "↩ Go back" button
+  (`st.session_state.history`); going back never re-grants items or revives monsters.
+- Balance targets are the same bands as before, but presets were recalibrated for
+  fail-forward (stakes = challenges on every route to victory) — see the generator spec.
 - **Dice system**: attributes are rolled **2d6** at character creation (range 2–12, avg 7);
   checks and combat roll **1d6** by default (engine default when `dice_type` is omitted).
   DC 13–14 is unreachable without an item bonus — items are deliberately the lever that
@@ -161,7 +212,24 @@ the UI/CLI display the result — failures are never silent. Headless/Docker: HT
 
 In-app generation is **provider-agnostic** — it auto-selects from whichever key is set, or
 honors `QUEST_GEN_PROVIDER` (`google` | `anthropic`):
-- **Google Gemini** (default): `GOOGLE_API_KEY` (or `GEMINI_API_KEY`); chain `gemini-3.5-flash → gemini-2.5-flash → gemini-2.5-flash-lite`.
+- **Google Gemini** (default, **free tier only** for now): `GOOGLE_API_KEY` (or `GEMINI_API_KEY`).
+  Free-tier limits are tiny and **per model**: each Flash model 5 req/min · 20 req/day; Flash Lite
+  3.5/3.1 15/min · 500/day; per project; reset at midnight Pacific. So the generation chain rotates
+  through every Flash model `gemini-3.8-flash → 3.7 → 3.6 → 3.5 → 3 → 2.5-flash` (≈120 writer
+  calls/day) and the story review uses Flash Lite `gemini-3.5-flash-lite → 3.1-flash-lite →
+  2.5-flash-lite`, so reviews never eat writing quota. `QUEST_GOOGLE_TIER=free` (default) makes
+  Gemini calls cost $0 in the budget ledger; set `paid` if billing is enabled. Pro models are
+  paid-only — don't put them in the chains.
+- **`quota.py`** — the free-tier guard. `call_model` asks `quota.reserve(model)` before every
+  request to a tracked model: counted → go; per-minute window full → wait (≤ `QUEST_QUOTA_MAX_WAIT`,
+  65 s) or skip; day used up → `QuotaSkip`, the fallback chain moves on without a call. 429/404
+  answers are learned (`note_error`) and are NOT blindly retried. `generation_slot()` allows one
+  story generation at a time (app + CLI scripts; others queue). `capacity()` = writer calls left
+  ÷ measured average calls per story → the Create page's "≈ N stories left today" counter; a
+  per-player daily cap (`QUEST_STORIES_PER_PLAYER`, default 3, keyed by a hashed IP or the
+  session). State in `state/quota.json` (file-locked; gitignored). Limits table in `quota.py`
+  (copied from AI Studio → Rate limit), override with `QUEST_MODEL_LIMITS` JSON. CLI:
+  `python3 quota.py` (today's usage + capacity), `python3 quota.py --check-models`.
 - **Anthropic Claude**: `ANTHROPIC_API_KEY`; chain `claude-sonnet-4-6 → claude-haiku-4-5-20251001`.
 
 **Model fallback:** generation tries the models in order and auto-advances to the next when one

@@ -23,6 +23,12 @@ COPY app.py .
 COPY story_engine.py .
 COPY story_agent.py .
 COPY playtest.py .
+COPY feedback.py .
+COPY game_rules.py .
+COPY narrative_review.py .
+COPY quota.py .
+COPY scripts/ ./scripts/
+COPY .streamlit/ ./.streamlit/
 COPY stories/ ./stories/
 COPY cyoa-skills/ ./cyoa-skills/
 

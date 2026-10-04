@@ -33,11 +33,25 @@ import argparse
 import story_engine as E
 
 
-def audit(path, difficulty):
+def _gates_line(s):
+    return (f"validate:{'OK' if s.get('correctness') else 'FAIL'}  "
+            f"coherence:{'OK' if s.get('coherence') else 'REVIEW'}  balance:{s.get('balance')}  "
+            f"story-review:{s.get('review', 'off')}")
+
+
+def audit(path, difficulty, with_review=False):
     print(f"Auditing {path} against '{difficulty}' …")
     ok, feedback, summary = E.gate_report(path, difficulty)
-    print(f"  validate:{'OK' if summary['correctness'] else 'FAIL'}  "
-          f"coherence:{'OK' if summary['coherence'] else 'REVIEW'}  balance:{summary['balance']}")
+    summary["review"] = "off"
+    if with_review:                                  # costs one cheap model call
+        usage = []
+        rv = E.run_review(E.load_story_file(path), usage_sink=usage, log=print)
+        summary["review"] = rv["status"]
+        if rv["status"] == "REVIEW":
+            ok = False
+            feedback.append("NARRATIVE — " + " | ".join(E.NR.feedback_lines(rv)))
+        print(f"  story review: {rv['status']} ({rv['detail']}) · ≈ ${sum(u['cost_usd'] for u in usage):.4f}")
+    print("  " + _gates_line(summary))
     for ln in summary["bal_lines"]:
         print("    " + ln)
     if ok:
@@ -74,6 +88,8 @@ def main():
                     help="if it can't pass all gates / a model limit is hit, save the best draft anyway (marked DRAFT)")
     ap.add_argument("--audit", default=None, metavar="STORY.json",
                     help="don't generate — just run the gates on an existing story and report")
+    ap.add_argument("--review", action="store_true",
+                    help="with --audit: also run the story-review agent (one cheap model call)")
     ap.add_argument("--s3-sync", action="store_true",
                     help="don't generate — two-way sync with the S3 bucket (QUEST_S3_BUCKET): "
                          "pull missing/newer stories down, upload local stories the bucket lacks")
@@ -91,7 +107,7 @@ def main():
         sys.exit(0 if not (derr + uerr) else 2)
 
     if args.audit:
-        sys.exit(0 if audit(args.audit, args.difficulty) else 2)
+        sys.exit(0 if audit(args.audit, args.difficulty, with_review=args.review) else 2)
 
     if not args.theme:
         ap.error("a theme is required (or use --audit STORY.json)")
@@ -109,11 +125,19 @@ def main():
           f"language={args.lang} ({args.level})  "
           f"provider={E.PROVIDER_LABEL.get(provider, provider)}")
     print(f"  model chain (auto-fallback on limit): {' → '.join(models)}")
-    ok, path, summary = E.create_story(
-        args.theme, args.difficulty, args.length, args.title, api_key,
-        provider=provider, models=models, out_path=args.out,
-        max_attempts=args.max_attempts, keep_best=args.save_draft, log=lambda *a: print(*a),
-        language=args.lang, language_level=args.level)
+    if provider == "google":
+        cap = E.Q.capacity(models, E.review_models(provider))
+        print(f"  free tier today: ≈ {cap['stories']} stories left · resets in {cap['resets_in_text']}")
+        if cap["stories"] < 1:
+            sys.exit("Today's free-tier quota is used up — try again after the reset (midnight Pacific).")
+    with E.Q.generation_slot(timeout=1800) as got:       # one generation at a time (app + CLI)
+        if not got:
+            sys.exit("Another story generation has been running for 30 min — try again later.")
+        ok, path, summary = E.create_story(
+            args.theme, args.difficulty, args.length, args.title, api_key,
+            provider=provider, models=models, out_path=args.out,
+            max_attempts=args.max_attempts, keep_best=args.save_draft, log=lambda *a: print(*a),
+            language=args.lang, language_level=args.level)
 
     if summary and summary.get("cost_usd") is not None:
         E.record_spend(summary.get("cost_usd", 0.0), summary.get("model_used", ""),
@@ -133,14 +157,14 @@ def main():
         n = len(E.load_story_file(path).get("locations", {}))
         bal = "  ".join(summary["bal_lines"][:2])
         print(f"✓ DONE — {path}  ({n} locations)")
-        print(f"  gates: validate OK · coherence OK · balance PASS   {bal}")
+        print(f"  gates: validate OK · coherence OK · balance PASS · story-review "
+              f"{summary.get('review', 'off')}   {bal}")
         print("  It now appears in the library on the main screen (streamlit run app.py).")
         sys.exit(0)
     elif path:   # --save-draft kept the best attempt
         n = len(E.load_story_file(path).get("locations", {}))
         print(f"~ DRAFT saved — {path}  ({n} locations) — did NOT pass every gate")
-        print(f"  validate:{'OK' if summary['correctness'] else 'FAIL'}  "
-              f"coherence:{'OK' if summary['coherence'] else 'REVIEW'}  balance:{summary['balance']}")
+        print("  " + _gates_line(summary))
         if summary.get("limit_error"):
             print(f"  (stopped early — model limit: {str(summary['limit_error'])[:100]})")
         print("  It appears in the library marked DRAFT. Regenerate later for a clean version.")
@@ -148,8 +172,7 @@ def main():
     else:
         print("✗ Could not reach all-green within the attempt budget (and --save-draft was not set).")
         if summary:
-            print(f"  last state: validate:{'OK' if summary['correctness'] else 'FAIL'}  "
-                  f"coherence:{'OK' if summary['coherence'] else 'REVIEW'}  balance:{summary['balance']}")
+            print("  last state: " + _gates_line(summary))
         print("  Try again, raise --max-attempts, simplify the theme, or pass --save-draft to keep the best attempt.")
         sys.exit(2)
 
