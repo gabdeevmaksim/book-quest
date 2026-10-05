@@ -35,6 +35,7 @@ QUEST_STORIES_PER_PLAYER (daily cap per player, default 3).
 
 CLI:  python3 quota.py                 # today's usage per model + capacity
       python3 quota.py --check-models  # which chain models your key can actually see
+      python3 quota.py check-models    # same (use this form through `docker compose exec`)
 """
 import contextlib
 import datetime
@@ -328,7 +329,8 @@ def main(argv):
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import story_engine as E
     writer, reviewer = E.gen_models("google"), E.review_models("google")
-    if "--check-models" in argv:
+    if "--check-models" in argv or "check-models" in argv:   # flag or plain word (some docker
+                                                            # compose versions eat --flags)
         from google import genai
         names = {m.name.split("/")[-1] for m in genai.Client(api_key=E.env_api_key("google")).models.list()}
         for role, chain in (("writer", writer), ("reviewer", reviewer)):

@@ -17,6 +17,8 @@ phases land.
 - **Phase 2 — Feedback window** ✅
 - **Phase 3 — Fail-forward mechanics, hinted dead ends, Go Back** ✅ (library regeneration pending)
 - **Phase 4 — Story-review agent** ✅ (4th gate: continuity review by a cheap model)
+- **Git auto-push of stories removed** — stories live on the server + S3; player content stays
+  out of the public repo; no GitHub write token on the server.
 - **Free-tier quota guard** ✅ — `quota.py`: per-model RPM/TPM/RPD tracking with the AI Studio
   limits, midnight-Pacific reset, skip/wait instead of hitting 429s, writer rotation across all
   Flash models + reviews on Flash Lite, one generation at a time (queue), per-player daily cap,
@@ -147,7 +149,12 @@ phases land.
 - **Regenerate the library** once Phases 3 + 4 are deployed (every story now also passes the
   story review):
   `docker compose exec quest-book python3 scripts/regenerate_library.py --dry-run`, then
-  `... --push`. Re-run `--only <file>` for any story that didn't pass every gate.
+  `docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py"`. Re-run
+  `--only <file>` for any story that didn't pass every gate.
+- Remove `QUEST_GIT_TOKEN` / `GITHUB_TOKEN` from the droplet `.env` / `DOTENV` — git auto-push
+  of stories is gone, so the server no longer needs a GitHub write token.
+- One-time: make sure S3 has every story — `docker compose exec quest-book sh -c
+  "python3 story_agent.py --s3-sync"`.
 - Update `.claude/agents/story-smith.md` (local, gitignored — I couldn't edit it): it still
   mentions retry checks / flee routes; it defers to the spec, which is current.
 

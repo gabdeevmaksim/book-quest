@@ -150,7 +150,7 @@ from story_engine import (  # Streamlit-free core (shared with story_agent.py)
     gen_provider, gen_default_model, env_api_key,
     list_stories, load_story_file, unique_story_path, save_story_file,
     validate_story_dict, balance_check, generate_story_api,
-    gen_models, create_story, push_story_to_git,
+    gen_models, create_story,
     s3_enabled, push_story_to_s3, sync_stories_from_s3,
     monthly_budget, month_spend, budget_exceeded, record_spend, free_fallback_models,
     review_models,
@@ -865,12 +865,6 @@ def show_library():
         render_feedback("library")
 
 
-def _push_story_to_git(path):
-    """Commit + push the new story (story_engine.push_story_to_git). Non-fatal, but the
-    outcome is RETURNED so the UI can show why a push didn't happen instead of hiding it."""
-    return push_story_to_git(path)
-
-
 def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model,
                  language="English", language_level="C2"):
     # Monthly budget policy: while under the cap, use the owner's chosen (paid) model first,
@@ -913,11 +907,10 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
     if summary and summary.get("cost_usd") is not None:
         record_spend(summary.get("cost_usd", 0.0), summary.get("model_used", ""),
                      summary.get("tokens_in", 0), summary.get("tokens_out", 0))
+    # Stories are kept on the server (stories/) and backed up to S3 — never pushed to git.
     if ok:
-        pushed, push_msg = _push_story_to_git(path)
         title = load_story_file(path).get("title") or theme
         out = {"ok": True, "path": path, "title": title,
-               "pushed": pushed, "push_msg": push_msg,
                "verdict": summary["balance"], "vlines": summary["bal_lines"], "gates": summary,
                "capped": capped, "cost_usd": summary.get("cost_usd"),
                "model_used": summary.get("model_used"), "attempts": summary.get("attempts"),
@@ -926,7 +919,6 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
             out["s3_ok"], out["s3_msg"] = push_story_to_s3(path)
         return out
     if path:   # gates not fully met / a model limit was hit — best draft was kept
-        pushed, push_msg = _push_story_to_git(path)
         title = load_story_file(path).get("title") or theme
         reasons = []
         if summary and not summary.get("correctness"):
@@ -938,7 +930,6 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
         if summary and summary.get("review") == "REVIEW":
             reasons.append("story continuity (the story review found problems)")
         out = {"ok": False, "draft": True, "path": path, "title": title, "reasons": reasons,
-               "pushed": pushed, "push_msg": push_msg,
                "verdict": (summary or {}).get("balance", "—"),
                "vlines": (summary or {}).get("bal_lines", []),
                "limit": (summary or {}).get("limit_error"),
@@ -953,19 +944,12 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
 
 
 def _show_push_status(res):
+    """Where the new story is stored: always on the server; plus the S3 backup if enabled."""
     if "s3_ok" in res:
         if res["s3_ok"]:
             st.caption(f"☁️ Saved to cloud storage — {res.get('s3_msg', '')}")
         else:
             st.warning(f"Story saved locally, but **cloud upload failed**: {res.get('s3_msg', 'unknown error')}")
-    if "pushed" not in res:
-        return
-    if res["pushed"]:
-        st.caption("✅ Pushed to the git remote.")
-    else:
-        st.warning(f"Story saved, but **not pushed to git**: {res.get('push_msg', 'unknown error')}")
-        st.caption("Headless server? Set `QUEST_GIT_TOKEN` (a GitHub PAT) in the environment / `.env`; "
-                   "identity can be set with `QUEST_GIT_NAME` / `QUEST_GIT_EMAIL`.")
 
 
 def show_create_page():

@@ -256,53 +256,9 @@ def save_story_file(story, path):
         json.dump(story, f, indent=2, ensure_ascii=False)
 
 
-def push_story_to_git(path):
-    """Commit a newly saved story and push it to the remote. Returns (ok, detail) and never
-    raises — `detail` carries the exact git error so callers can SHOW it instead of hiding it.
-
-    Headless/Docker friendly:
-    - `safe.directory=*` (bind-mounted repos owned by another uid),
-    - identity fallback when user.name/email are unset (override with QUEST_GIT_NAME/EMAIL),
-    - HTTPS push auth via QUEST_GIT_TOKEN or GITHUB_TOKEN (a GitHub PAT) when no credential
-      helper is available."""
-    import subprocess
-
-    def run(args):
-        try:
-            return subprocess.run(args, capture_output=True, text=True, timeout=60)
-        except Exception as e:  # git missing, timeout, …
-            return subprocess.CompletedProcess(args, 255, "", str(e))
-
-    token = os.environ.get("QUEST_GIT_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
-
-    def redact(s):
-        return (s or "").replace(token, "***") if token else (s or "")
-
-    git = ["git", "-c", "safe.directory=*"]
-    if not run(["git", "config", "user.name"]).stdout.strip():
-        git += ["-c", "user.name=" + os.environ.get("QUEST_GIT_NAME", "Quest Book")]
-    if not run(["git", "config", "user.email"]).stdout.strip():
-        git += ["-c", "user.email=" + os.environ.get("QUEST_GIT_EMAIL", "quest-book@localhost")]
-
-    for stage, cmd in [("add", git + ["add", "-f", path]),
-                       ("commit", git + ["commit", "-m", f"Add story: {os.path.basename(path)}",
-                                         "--", path])]:
-        r = run(cmd)
-        if r.returncode != 0:
-            return False, f"git {stage} failed: {redact(r.stderr or r.stdout).strip()[:300]}"
-
-    push_cmd = git + ["push"]
-    if token:
-        url = run(["git", "remote", "get-url", "--push", "origin"]).stdout.strip()
-        if url.startswith("https://") and "@" not in url:
-            push_cmd = git + ["push",
-                              url.replace("https://", f"https://x-access-token:{token}@", 1),
-                              "HEAD"]
-    r = run(push_cmd)
-    if r.returncode != 0:
-        return False, ("committed locally, but git push failed: "
-                       + redact(r.stderr or r.stdout).strip()[:300])
-    return True, "committed and pushed to the remote"
+# Git auto-push of stories was removed (deprecated): stories live on the server in stories/
+# and are backed up to S3 (below). Player-generated content no longer goes into the public repo,
+# and the server no longer needs a GitHub write token.
 
 
 # ── optional S3-compatible story storage (AWS S3 / Cloudflare R2 / Backblaze B2 / MinIO) ──
@@ -520,15 +476,13 @@ def call_model(provider, model, system, messages, api_key, usage_sink=None):
             client = genai.Client(api_key=api_key)
             contents = [types.Content(role=("model" if m["role"] == "assistant" else "user"),
                                       parts=[types.Part(text=m["content"])]) for m in messages]
+            cfg = dict(system_instruction=system, max_output_tokens=GEN_MAX_TOKENS,
+                       temperature=0.9, response_mime_type="application/json")
+            afc = getattr(types, "AutomaticFunctionCallingConfig", None)
+            if afc is not None:      # we pass no tools — turn AFC off (silences the SDK's AFC warning)
+                cfg["automatic_function_calling"] = afc(disable=True)
             resp = client.models.generate_content(
-                model=model, contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system,
-                    max_output_tokens=GEN_MAX_TOKENS,
-                    temperature=0.9,
-                    response_mime_type="application/json",
-                ),
-            )
+                model=model, contents=contents, config=types.GenerateContentConfig(**cfg))
             um = getattr(resp, "usage_metadata", None)
             _record(getattr(um, "prompt_token_count", 0), getattr(um, "candidates_token_count", 0))
             return resp.text or ""

@@ -93,7 +93,7 @@ reset at midnight Pacific): every Flash model allows 5 requests/min and **20/day
 First run after deploying, check that your key sees every model in the chains, then watch usage:
 
 ```bash
-docker compose exec quest-book python3 quota.py --check-models
+docker compose exec quest-book python3 quota.py check-models
 docker compose exec quest-book python3 quota.py          # today's usage + capacity
 ```
 
@@ -110,9 +110,10 @@ honoured) but have no outcome texts or hinted dead ends. Rebuild them once, on t
 
 ```bash
 cd /path/to/book-quest
-docker compose exec quest-book python3 scripts/regenerate_library.py --dry-run   # the plan
-docker compose exec quest-book python3 scripts/regenerate_library.py --push      # do it
-docker compose exec quest-book python3 scripts/regenerate_library.py --only dust_and_rust.json --push
+# (wrap in sh -c "…": some docker compose versions swallow --flags meant for the script)
+docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py --dry-run"   # the plan
+docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py"            # do it
+docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py --only dust_and_rust.json"
 ```
 
 On the free tier the script checks today's capacity before each story; when it runs out it
@@ -124,7 +125,7 @@ Each story keeps its title, theme, difficulty, language and filename (shared lin
 working); the old version goes to `stories/_archive/`, and stays live if the new one fails a
 gate — including the story review (a cheap-model continuity check; `QUEST_REVIEW=0` turns it
 off). Cost is printed per story and counted in the monthly budget. New stories appear in the
-running app immediately; story commits don't trigger a redeploy.
+running app immediately and are uploaded to S3; nothing is pushed to git.
 
 ## Player feedback (Telegram)
 
@@ -143,7 +144,7 @@ Read saved feedback on the droplet:
 ```bash
 cd /path/to/book-quest
 docker compose exec quest-book python3 feedback.py            # latest 20
-docker compose exec quest-book python3 feedback.py --kind bug -n 50
+docker compose exec quest-book sh -c "python3 feedback.py --kind bug -n 50"
 ```
 
 ## Security notes

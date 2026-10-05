@@ -9,14 +9,15 @@ so shared `?story=` links keep working. It goes through the full gated pipeline
 the old version is copied to stories/_archive/<name>.<date>.json. If a story can't pass every
 gate, the old version stays in place untouched.
 
-Run it ON THE DROPLET, inside the app container (it has the API keys and the git push config):
+Run it ON THE DROPLET, inside the app container (it has the API keys and the S3 config):
 
-    docker compose exec quest-book python3 scripts/regenerate_library.py --dry-run
-    docker compose exec quest-book python3 scripts/regenerate_library.py --push
-    docker compose exec quest-book python3 scripts/regenerate_library.py --only dust_and_rust.json --push
+    docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py --dry-run"
+    docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py"
+    docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py --only dust_and_rust.json"
 
-The running app picks up regenerated stories immediately (it reads stories/ from disk).
-Story commits don't trigger a redeploy (stories/ is ignored by the CI/CD workflow).
+The running app picks up regenerated stories immediately (it reads stories/ from disk); each new
+version is also uploaded to S3 when QUEST_S3_BUCKET is set. Nothing is pushed to git (--push is
+deprecated and ignored).
 """
 import argparse
 import json
@@ -73,12 +74,16 @@ def main():
     ap = argparse.ArgumentParser(description="Regenerate library stories under the current rules.")
     ap.add_argument("--only", nargs="+", metavar="FILE", help="only these story files (basename)")
     ap.add_argument("--dry-run", action="store_true", help="show the plan, generate nothing")
-    ap.add_argument("--push", action="store_true", help="git commit + push each regenerated story")
+    ap.add_argument("--push", action="store_true",
+                    help="DEPRECATED, ignored — stories stay on the server and are backed up to S3")
     ap.add_argument("--max-attempts", type=int, default=5)
     ap.add_argument("--length", type=int, default=None, help="override target size (locations)")
     ap.add_argument("--ignore-budget", action="store_true",
                     help="run even if this month's QUEST_MONTHLY_BUDGET_USD is already used up")
     args = ap.parse_args()
+    if args.push:
+        print("note: --push is deprecated and ignored — stories stay on the server and are backed "
+              "up to S3, not pushed to git.\n")
 
     paths = [s["path"] for s in E.list_stories() if not s.get("error")]
     if args.only:
@@ -145,9 +150,6 @@ def main():
         if ok:
             keep_identity(path, it)
             print(f"    ✓ regenerated — {summary.get('attempts', '?')} model call(s), ≈ ${cost:.3f}")
-            if args.push:
-                pushed, detail = E.push_story_to_git(path)
-                print(("    ✓ git: " if pushed else "    ✗ git: ") + detail)
             if E.s3_enabled():
                 s3_ok, detail = E.push_story_to_s3(path)
                 print(("    ✓ s3: " if s3_ok else "    ✗ s3: ") + detail)
@@ -170,8 +172,7 @@ def main():
     rest = failed + [x["file"] for x in not_started]
     if rest:
         print(f"  Resume (after the reset if the quota ran out):\n"
-              f"    python3 scripts/regenerate_library.py --only {' '.join(rest)}"
-              + (" --push" if args.push else ""))
+              f"    python3 scripts/regenerate_library.py --only {' '.join(rest)}")
     sys.exit(0 if not rest else 2)
 
 

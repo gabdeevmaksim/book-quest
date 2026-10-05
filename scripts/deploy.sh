@@ -18,8 +18,9 @@ git_() { git -c safe.directory='*' "$@"; }
 
 echo "==> Updating code ($BRANCH)"
 git_ checkout --quiet "$BRANCH"
-# The app commits + pushes new stories from this server. If one of those commits hasn't reached
-# GitHub yet, rebase keeps it on top of the new code instead of throwing it away.
+# Older app versions committed stories locally on this server; if any such commit never reached
+# GitHub, rebase keeps it on top of the new code instead of throwing it away. (New stories are
+# untracked files in stories/ + S3 and don't interact with git at all.)
 if ! git_ pull --rebase --autostash --quiet origin "$BRANCH"; then
     git_ rebase --abort 2>/dev/null || true
     echo "!! git pull failed (conflict?) — the running app was left untouched." >&2
@@ -27,7 +28,7 @@ if ! git_ pull --rebase --autostash --quiet origin "$BRANCH"; then
 fi
 ahead=$(git_ rev-list --count "origin/$BRANCH..HEAD")
 if [ "$ahead" -gt 0 ]; then
-    echo "   note: $ahead local story commit(s) not on GitHub yet — kept (the app pushes them)."
+    echo "   note: $ahead old local story commit(s) not on GitHub — kept on top of the new code."
 fi
 echo "   now at $(git_ log -1 --format='%h %s')"
 

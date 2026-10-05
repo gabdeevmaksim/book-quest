@@ -118,7 +118,8 @@ Gemini 2.5 Flash). CLI: `python3 narrative_review.py stories/<slug>.json`;
 **`scripts/regenerate_library.py`** — rebuilds library stories under the current rules with
 the same title/theme/difficulty/language/filename via `create_story`; archives the old version
 to `stories/_archive/` (gitignored) and keeps it if the new one fails a gate. Run on the droplet:
-`docker compose exec quest-book python3 scripts/regenerate_library.py [--dry-run] [--push]`.
+`docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py [--dry-run] [--only F]"`
+(regenerated stories are uploaded to S3, never pushed to git).
 
 **`cyoa-skills/`** — Claude skills (`.skill` files are zip archives of these dirs):
 - `cyoa-generator`: the authoritative story-generation spec (schema, design rules, difficulty
@@ -204,11 +205,12 @@ app pulls missing/newer stories at startup (`sync_stories_from_s3`). Config: `QU
 standard `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`. One-time migration / manual sync:
 `python3 story_agent.py --s3-sync` (pulls newer, uploads local-only). Needs `boto3`.
 
-**Git auto-push of new stories** (`story_engine.push_story_to_git`, used by the Create page and
-`story_agent.py --push`): commits `Add story: <file>` and pushes. It returns `(ok, detail)` and
-the UI/CLI display the result — failures are never silent. Headless/Docker: HTTPS push auth via
-`QUEST_GIT_TOKEN` (or `GITHUB_TOKEN`, a GitHub PAT); identity fallback `QUEST_GIT_NAME` /
-`QUEST_GIT_EMAIL` (defaults `Quest Book <quest-book@localhost>`); `safe.directory` is handled.
+**Where stories live:** on the server in `stories/` (untracked, survives deploys via the bind
+mount) and backed up to the S3 bucket. **Git auto-push of stories was removed** — player-made
+content no longer goes into the public repo and the server needs no GitHub write token
+(`QUEST_GIT_TOKEN` is unused). `--push` on `story_agent.py` / `regenerate_library.py` is
+accepted but ignored. The stories committed in the repo are the bundled starter library (CI
+validates them); don't add a git-push path back for generated stories.
 
 In-app generation is **provider-agnostic** — it auto-selects from whichever key is set, or
 honors `QUEST_GEN_PROVIDER` (`google` | `anthropic`):

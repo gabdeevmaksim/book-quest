@@ -82,8 +82,7 @@ def main():
     ap.add_argument("--max-attempts", type=int, default=6)
     ap.add_argument("--out", default=None, help="explicit output path (default: stories/<slug>.json)")
     ap.add_argument("--push", action="store_true",
-                    help="after saving, git commit + push the story to the remote "
-                         "(headless auth: set QUEST_GIT_TOKEN / GITHUB_TOKEN)")
+                    help="DEPRECATED, ignored — stories stay on the server and are backed up to S3")
     ap.add_argument("--save-draft", action="store_true",
                     help="if it can't pass all gates / a model limit is hit, save the best draft anyway (marked DRAFT)")
     ap.add_argument("--audit", default=None, metavar="STORY.json",
@@ -150,9 +149,8 @@ def main():
     if path and E.s3_enabled():
         s3_ok, s3_detail = E.push_story_to_s3(path)
         print(("✓ s3: " if s3_ok else "✗ s3: ") + s3_detail)
-    if path and args.push:
-        pushed, detail = E.push_story_to_git(path)
-        print(("✓ git: " if pushed else "✗ git: ") + detail)
+    if args.push:
+        print("note: --push is deprecated and ignored — stories are kept on the server + S3, not git.")
     if ok:
         n = len(E.load_story_file(path).get("locations", {}))
         bal = "  ".join(summary["bal_lines"][:2])
