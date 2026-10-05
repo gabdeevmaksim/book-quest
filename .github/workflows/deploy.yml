@@ -23,12 +23,12 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04     # pinned: ubuntu-latest moves to 26.04 from 2026-10-19 — switch deliberately
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7          # Node 24 runtime
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7      # Node 24 runtime
         with:
           python-version: "3.12"        # same as the Docker image
           cache: pip
@@ -45,7 +45,7 @@ jobs:
   deploy:
     needs: test
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04     # pinned: ubuntu-latest moves to 26.04 from 2026-10-19 — switch deliberately
     timeout-minutes: 20
     environment: production
     env:
@@ -53,7 +53,7 @@ jobs:
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7          # Node 24 runtime
 
       - name: Check deploy secrets
         run: |

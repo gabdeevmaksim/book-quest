@@ -18,8 +18,12 @@ No more logging in to pull and re-run.
 ### 1. Prepare the droplet (SSH in once more — the last time)
 
 ```bash
-# Compose v2 (fixes the old `KeyError: 'id'` crash; the deploy script prefers it)
-apt-get update && apt-get install -y docker-compose-plugin
+# Compose v2 (the old docker-compose 1.x crashes with KeyError 'id' / 'ContainerConfig';
+# the deploy script prefers v2 and only falls back to a slower build → down → up with 1.x).
+# Package name depends on where Docker came from: Docker's repo → docker-compose-plugin,
+# Ubuntu's docker.io → docker-compose-v2.
+apt-get update && (apt-get install -y docker-compose-plugin || apt-get install -y docker-compose-v2)
+docker compose version          # must print v2.x
 
 cd /path/to/book-quest          # the folder the app runs from — this is DEPLOY_PATH
 docker-compose down             # stop the v1-managed container once; CI starts it with v2

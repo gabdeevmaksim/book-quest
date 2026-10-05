@@ -40,9 +40,20 @@ fi
 chmod 600 .env
 
 # Prefer Compose v2 (`docker compose`); fall back to the legacy v1 binary if that's all there is.
-if docker compose version >/dev/null 2>&1; then DC=(docker compose); else DC=(docker-compose); fi
-echo "==> Rebuilding + restarting (${DC[*]})"
-"${DC[@]}" up -d --build --force-recreate --remove-orphans
+if docker compose version >/dev/null 2>&1; then
+    echo "==> Rebuilding + restarting (docker compose v2)"
+    DC=(docker compose)
+    "${DC[@]}" up -d --build --force-recreate --remove-orphans
+else
+    # Legacy docker-compose 1.x crashes with KeyError 'ContainerConfig' when it RECREATES a
+    # container from an image built by a modern Docker Engine (and leaves the site down). So:
+    # build first (old container keeps serving), then remove the old container and start fresh.
+    echo "==> Rebuilding + restarting (legacy docker-compose v1 — please install Compose v2, see DEPLOY.md)"
+    DC=(docker-compose)
+    "${DC[@]}" build
+    "${DC[@]}" down --remove-orphans
+    "${DC[@]}" up -d
+fi
 docker image prune -f >/dev/null 2>&1 || true
 
 echo "==> Waiting for the app to become healthy"
