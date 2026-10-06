@@ -1,6 +1,7 @@
-"""quota.py — free-tier rate limiting (fake clock: no real waiting, no API calls)."""
+"""quota.py — rate limiting (fake clock: no real waiting, no API calls)."""
 import datetime
 import json
+import time
 
 import pytest
 
@@ -26,6 +27,7 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("QUEST_QUOTA_FILE", str(tmp_path / "quota.json"))
     monkeypatch.delenv("QUEST_MODEL_LIMITS", raising=False)
     monkeypatch.delenv("QUEST_STORIES_PER_PLAYER", raising=False)
+    monkeypatch.setenv("QUEST_GOOGLE_TIER", "free")
 
 
 def _limits(monkeypatch, **models):
@@ -107,7 +109,7 @@ def test_model_call_skips_spent_model_without_calling_the_api():
         Q.note_error(m, "429 quota exceeded per day")
     with pytest.raises(Q.QuotaSkip):
         E.call_model("google", "gemini-3.8-flash", "sys", [{"role": "user", "content": "x"}], "key")
-    with pytest.raises(RuntimeError, match="free-tier quota"):
+    with pytest.raises(RuntimeError, match="quota is used up"):
         E.call_with_fallback("google", ["gemini-3.8-flash", "gemini-3.7-flash"], "sys",
                              [{"role": "user", "content": "x"}], "key")
 
@@ -117,3 +119,52 @@ def test_pacific_clock_without_tz_database():
     jan = datetime.datetime(2026, 1, 15, 12, tzinfo=datetime.timezone.utc)
     assert Q._pacific_offset_hours(july) == -7 and Q._pacific_offset_hours(jan) == -8
     assert 0 <= Q.seconds_until_reset() <= 86400 and len(Q.quota_day()) == 10
+
+
+def test_tier_picks_the_limit_table(monkeypatch):
+    assert Q.limits()["gemini-3.8-flash"]["rpd"] == 20
+    monkeypatch.setenv("QUEST_GOOGLE_TIER", "paid")
+    assert Q.tier() == "paid" and Q.limits()["gemini-3.8-flash"]["rpd"] == 10_000
+    monkeypatch.delenv("QUEST_GOOGLE_TIER")
+    assert Q.tier() == "paid"                                     # default: billing linked
+    assert "gemini-3-flash" not in Q.limits()                     # 404 model dropped
+
+
+def test_capacity_is_limited_by_the_budget_on_paid(monkeypatch):
+    monkeypatch.setenv("QUEST_GOOGLE_TIER", "paid")
+    writers = ["gemini-3.8-flash"]
+    cap = Q.capacity(writers, budget_left=1.0)                    # $1 / $0.08 default
+    assert cap["stories"] == 12 and cap["limited_by"] == "budget"
+    for _ in range(3):
+        Q.record_run(3, 1, 0.125)                                 # measured: 12.5 cents per story
+    assert Q.capacity(writers, budget_left=1.0)["stories"] == 8
+    assert Q.capacity(writers, budget_left=0.01)["stories"] == 0
+    cap = Q.capacity(writers)                                     # no cap → request limits only
+    assert cap["limited_by"] == "quota" and cap["stories"] > 1000
+
+
+def test_overload_streak_opens_the_circuit_then_success_closes_it():
+    c = Clock(time.time())                                        # real clock: note_success uses it
+    Q.note_error("gemini-3.8-flash", "503 UNAVAILABLE: model overloaded", clock=c)
+    Q.note_error("gemini-3.8-flash", "500 INTERNAL", clock=c)
+    assert not Q.overloaded("gemini-3.8-flash", now=c.t)          # 2 in a row: not yet
+    Q.note_error("gemini-3.8-flash", "503 UNAVAILABLE", clock=c)
+    assert Q.overloaded("gemini-3.8-flash", now=c.t)
+    assert Q.healthy_first(["gemini-3.8-flash", "gemini-3.7-flash"], now=c.t) == \
+        ["gemini-3.7-flash", "gemini-3.8-flash"]                  # still tried, but last
+    assert not Q.overloaded("gemini-3.8-flash", now=c.t + Q.OVERLOAD_COOLDOWN + 1)
+    Q.note_success("gemini-3.8-flash")
+    assert not Q.overloaded("gemini-3.8-flash", now=c.t)
+    assert Q.reserve("gemini-3.8-flash", clock=c, sleep=c.sleep)[0]   # 5xx never blocks requests
+
+
+def test_free_backup_counts_separately(monkeypatch):
+    monkeypatch.setenv("QUEST_GOOGLE_TIER", "paid")
+    c = Clock(time.time())
+    Q.reserve("gemini-3.8-flash", clock=c, sleep=c.sleep)            # paid project
+    with Q.use_tier("free"):
+        assert Q.tier() == "free" and Q.usage()["gemini-3.8-flash"]["used"] == 0
+        Q.reserve("gemini-3.8-flash", clock=c, sleep=c.sleep)
+        Q.reserve("gemini-3.8-flash", clock=c, sleep=c.sleep)
+        assert Q.usage()["gemini-3.8-flash"] == {**Q.usage()["gemini-3.8-flash"], "used": 2, "limit": 20}
+    assert Q.tier() == "paid" and Q.usage()["gemini-3.8-flash"]["used"] == 1

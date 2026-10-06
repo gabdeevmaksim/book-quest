@@ -23,6 +23,12 @@ phases land.
   limits, midnight-Pacific reset, skip/wait instead of hitting 429s, writer rotation across all
   Flash models + reviews on Flash Lite, one generation at a time (queue), per-player daily cap,
   and a "≈ N stories can still be created today" counter on the Create page.
+- **Paid Gemini (Tier 1) + monthly cap** ✅ — decision: keep billing on, cap the spend.
+  `QUEST_GOOGLE_TIER=paid` is the default: real prices in the ledger, Tier 1 limits, budget-
+  aware "stories left" counter, creation pauses (library stays open) at
+  `QUEST_MONTHLY_BUDGET_USD`. Google 503s are waited out on the best model (≈60 s in the app,
+  5 min in scripts) before stepping down the chain, and a model that keeps failing is tried
+  last for a few minutes. `gemini-3-flash` (404) dropped from the chain.
 - **CI/CD** ✅ — push to `master` → tests → automatic deploy to the droplet (see `DEPLOY.md`).
   Secrets can live in GitHub (`DOTENV`). Docker image moved to Python 3.12.
 
@@ -139,13 +145,17 @@ phases land.
 
 ## Owner to-dos
 
-- **Models: free-tier Gemini only (for now).** Stories are written by rotating through the
-  Flash models (3.8 first; each has only 20 requests/day) and checked by Flash Lite (500/day).
-  Remove any old `QUEST_GEN_MODEL=claude-…` / `QUEST_GEN_PROVIDER=anthropic` from `.env` (see
-  `DEPLOY.md`). After deploying run `python3 quota.py --check-models` once.
-  Later: compare writers side by side with `compare_models.py --models
-  gemini-3.8-flash,gemini-3.5-flash,gemini-2.5-flash --runs 2` (free — uses quota) and keep the
-  lowest one whose stories still pass.
+- **Models: paid Gemini Tier 1 with a cap in SEK, free tier after it** (decision: after the cap
+  go back to the free tier and tell players it's slower / maybe less polished). Set
+  `QUEST_BUDGET_CURRENCY=SEK`, `QUEST_USD_RATE`, `QUEST_MONTHLY_BUDGET` and
+  `QUEST_GOOGLE_FREE_API_KEY` (second AI Studio project, no billing) in `.env` / `DOTENV`, plus a
+  budget alert in Google Cloud Billing. Remove any old
+  `QUEST_GEN_MODEL=claude-…` / `QUEST_GEN_PROVIDER=anthropic`. After deploying run
+  `python3 quota.py check-models` once.
+- **1 Jan 2027**: Gemini 3.8/3.7/3.6 Flash prices double — update `MODEL_PRICING`.
+- Later: compare writers with `compare_models.py --models
+  gemini-3.8-flash,gemini-3.6-flash,gemini-2.5-flash --runs 2` and keep the cheapest one whose
+  stories still pass.
 - **Regenerate the library** once Phases 3 + 4 are deployed (every story now also passes the
   story review):
   `docker compose exec quest-book python3 scripts/regenerate_library.py --dry-run`, then

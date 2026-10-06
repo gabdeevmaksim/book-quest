@@ -64,44 +64,72 @@ manual edits on the droplet get overwritten by the next deploy.
 Push to `master` (or Actions → Run workflow) and watch the **Actions** tab. The first run
 rebuilds the image from scratch (Python 3.12), so it takes a few minutes.
 
-## Models: free-tier Gemini
+## Models: Gemini (paid Tier 1, with a monthly cap)
 
-Generation and the story review run on the Gemini API **free tier**. In the droplet's `.env`
-(or the `DOTENV` secret) you only need:
+Generation and the story review run on Gemini Flash / Flash Lite. The book-quest project has
+billing linked (**Tier 1**), which is the app's default. In the droplet's `.env` (or the
+`DOTENV` secret):
 
 ```
 GOOGLE_API_KEY=...
 QUEST_GEN_PROVIDER=google
-# QUEST_GOOGLE_TIER=free            # default — Gemini calls count as $0 in the budget ledger
+QUEST_GOOGLE_TIER=paid              # default; "free" = free-tier limits and $0 in the ledger
+QUEST_BUDGET_CURRENCY=SEK           # show and set the budget in kronor
+QUEST_USD_RATE=12.6                 # kr per US dollar — 10.07 (Oct 2026) × 1.25 VAT
+QUEST_MONTHLY_BUDGET=150            # the app's own spend cap per calendar month, in kr (0 = none)
+QUEST_GOOGLE_FREE_API_KEY=...       # key from a SECOND Google project WITHOUT billing (see below)
+# QUEST_OVERLOAD_PATIENCE=60        # s the app waits out Google 503s on one model (scripts: 300)
 ```
 
-Remove any `QUEST_GEN_MODEL=claude-…` / `QUEST_GEN_PROVIDER=anthropic` lines from earlier — a
-pinned model overrides the defaults. Google may use free-tier prompts to improve its products.
+Google prices models in USD and bills you in SEK at its own rate, so the app's figures are
+estimates: keep the rate current-ish, and include VAT in it if your invoice has VAT on top.
+(`QUEST_MONTHLY_BUDGET_USD` still works if you'd rather set dollars.)
 
-**Free-tier limits and how the app stays inside them** (AI Studio → Rate limit, per project,
-reset at midnight Pacific): every Flash model allows 5 requests/min and **20/day**; Flash Lite
-3.5/3.1 allow 15/min and 500/day. So:
-- stories are written by rotating through the Flash models (3.8 → 3.7 → 3.6 → 3.5 → 3 → 2.5,
-  ≈120 calls/day ≈ 40 stories at ~3 calls each), and reviewed by Flash Lite;
-- `quota.py` counts every call, waits briefly when a per-minute window is full, skips a model
-  once its day is used up, and learns from real 429s;
-- only one story is generated at a time — other players queue for a couple of minutes;
-- each player can create `QUEST_STORIES_PER_PLAYER` stories per day (default 3);
-- the Create page shows "≈ N stories can still be created today · resets in X", and pauses
-  creation (library stays playable) when it reaches 0.
+**Free backup after the cap.** Billing is per *project*: a key from the billed project is never
+free. So for the fallback create a second project in AI Studio (Get API key → Create API key in
+a new project), don't link billing to it, and put its key in `QUEST_GOOGLE_FREE_API_KEY`. Once
+the month's spend reaches the cap, new stories are written with that key on the free tier
+(20 requests/day per Flash model, one story at a time); the Create page tells players stories
+take longer and may be a little less polished until next month. Without that key, creation
+pauses at the cap instead.
+
+Remove any `QUEST_GEN_MODEL=claude-…` / `QUEST_GEN_PROVIDER=anthropic` lines from earlier — a
+pinned model overrides the defaults.
+
+**Cost.** Gemini 3.8 Flash costs $0.75 / $3.75 per million input / output tokens (doubling to
+$1.50 / $7.50 on 1 Jan 2027 — update `MODEL_PRICING` in `story_engine.py` then). One story is
+≈ $0.03–0.10 including repairs and the review. Every generation is added to the monthly ledger
+(`state/usage.json`). When the month's spend reaches `QUEST_MONTHLY_BUDGET`, creation moves to
+the free backup project (or pauses without one); the library stays playable. Google adds its
+own Tier 1 ceiling of $250/month — also set a budget alert in Google Cloud Billing (in SEK) as a
+backstop.
+
+**Limits** (Tier 1, per project, daily reset at midnight Pacific): Flash 3.8/3.7/3.6/3.5 —
+1000 req/min, 10 000/day each; Flash Lite — 4000/min, 150 000/day. In practice the limit you
+hit is Google's own capacity: **503 "model overloaded"** answers. So:
+- the app retries a 503/500 on the same model with growing pauses (≈5 → 10 → 20 s, up to
+  `QUEST_OVERLOAD_PATIENCE`, 60 s) before stepping down the chain 3.8 → 3.7 → 3.6 → 3.5 → 2.5;
+  `regenerate_library.py` / `story_agent.py` wait up to 5 min, since nobody is waiting on them;
+- after 3 overload errors within 5 min a model is tried **last** for 3 min, so the next player
+  starts on a healthy model instead of sitting through the same retries;
+- players can generate in parallel; each can create `QUEST_STORIES_PER_PLAYER` stories per day
+  (default 3), which also keeps one person from spending the budget.
+
+Back on the free tier (`QUEST_GOOGLE_TIER=free`): 20 requests/day per Flash model, one
+generation at a time, and the free chain keeps working after the budget cap.
 
 First run after deploying, check that your key sees every model in the chains, then watch usage:
 
 ```bash
 docker compose exec quest-book python3 quota.py check-models
-docker compose exec quest-book python3 quota.py          # today's usage + capacity
+docker compose exec quest-book python3 quota.py          # today's usage, budget, capacity
 ```
 
 If a model shows `✗ NOT AVAILABLE`, it is skipped automatically (and marked off for the day the
 first time it's tried); you can also drop it with `QUEST_GEN_MODELS=...`. If Google changes the
-limits, update the table in `quota.py` or set `QUEST_MODEL_LIMITS='{"gemini-3.8-flash":
-{"rpm": 5, "tpm": 250000, "rpd": 20}}'`. To write with a lower model, e.g.
-`QUEST_GEN_MODELS=gemini-3.5-flash,gemini-2.5-flash`.
+limits, update the tables in `quota.py` or set `QUEST_MODEL_LIMITS='{"gemini-3.8-flash":
+{"rpm": 1000, "tpm": 2000000, "rpd": 10000}}'`. To write with a cheaper model, e.g.
+`QUEST_GEN_MODELS=gemini-3.6-flash,gemini-2.5-flash`.
 
 ## Regenerating the library (after the Phase 3 deploy)
 
@@ -116,10 +144,9 @@ docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py"    
 docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py --only dust_and_rust.json"
 ```
 
-On the free tier the script checks today's capacity before each story; when it runs out it
-stops and prints the exact `--only …` command to resume after midnight Pacific (7 stories ≈
-20–30 writer calls, so it usually fits in one day). It also waits its turn if a player is
-generating a story in the app at the same moment.
+Before each story the script checks the monthly budget and today's request quota; if either
+runs out it stops and prints the exact `--only …` command to resume. 7 stories cost roughly
+$0.25–0.70 on Tier 1. It also waits its turn if a player is generating a story in the app.
 
 Each story keeps its title, theme, difficulty, language and filename (shared links keep
 working); the old version goes to `stories/_archive/`, and stays live if the new one fails a

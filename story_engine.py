@@ -19,6 +19,7 @@ import os
 import re
 import json
 import time
+import random
 import glob
 import tempfile
 import subprocess
@@ -62,37 +63,41 @@ GEN_MAX_TOKENS = 16000
 DEFAULT_MODELS = {"google": "gemini-3.8-flash", "anthropic": "claude-sonnet-4-6"}
 # Fallback chains: if a model hits its (free-tier) limit, the agent advances to the next one.
 # Override with QUEST_GEN_MODELS="m1,m2,..." or pin a single one with QUEST_GEN_MODEL="m".
-# Google defaults are all on the Gemini API FREE tier (Pro models are paid-only). Each Flash
-# model has its own 20 requests/day, so writing rotates through all of them (≈120/day);
-# quota.py skips a model once its day is used up. Reviewing uses the Flash Lite models.
+# Google: Flash models only (Pro would cost several times more). On the free tier each has
+# its own 20 requests/day, so writing rotates through all of them; on Tier 1 the chain is
+# mostly a fallback for Google-side overload (503). Reviewing uses the Flash Lite models.
 DEFAULT_MODEL_CHAINS = {
     "google":    ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash",
-                  "gemini-3.5-flash", "gemini-3-flash", "gemini-2.5-flash"],
+                  "gemini-3.5-flash", "gemini-2.5-flash"],
     "anthropic": ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
 }
 PROVIDER_LABEL = {"google": "Google (Gemini)", "anthropic": "Anthropic (Claude)"}
 PROVIDER_PKG   = {"google": "google-genai", "anthropic": "anthropic"}
 
 # ── cost tracking & monthly budget ──────────────────────────────────────────────
-# Paid API prices in USD per 1,000,000 tokens (input, output) — current as of June 2026.
-# EDIT THIS TABLE if prices change or you add models. Free-tier Google models are listed at
-# 0.0 so they never count against the paid budget — they're the backup used once the cap hits.
+# Paid API prices in USD per 1,000,000 tokens (input, output) — AI Studio, 2026-10-06.
+# EDIT THIS TABLE if prices change or you add models (unknown models count as $0!).
+# With QUEST_GOOGLE_TIER=free every Gemini call counts as $0 instead.
 MODEL_PRICING = {
     "claude-opus-4-8":           (5.0, 25.0),
     "claude-sonnet-4-6":         (3.0, 15.0),
     "claude-haiku-4-5-20251001": (1.0,  5.0),
-    "gemini-3.8-flash":          (0.75, 3.75),  # paid price through 2026 (doubles Jan 2027)
+    "gemini-3.8-flash":          (0.75, 3.75),  # 3.8/3.7/3.6: price doubles on 2027-01-01
+    "gemini-3.7-flash":          (0.75, 3.75),  #   (→ 1.50 / 7.50) — update then
+    "gemini-3.6-flash":          (0.75, 3.75),
     "gemini-3.5-flash":          (1.5,  9.0),
+    "gemini-2.5-flash":          (0.30, 2.50),
     "gemini-3.1-pro":            (2.0, 12.0),
-    "gemini-2.5-flash":          (0.0,  0.0),   # free-tier backup
-    "gemini-2.5-flash-lite":     (0.0,  0.0),   # free-tier backup
+    "gemini-3.5-flash-lite":     (0.30, 2.50),
+    "gemini-3.1-flash-lite":     (0.25, 1.50),
+    "gemini-2.5-flash-lite":     (0.10, 0.40),
 }
 
 
 def google_tier():
-    """'free' (default) or 'paid' — whether the Google key's project has billing enabled.
+    """'paid' (default — billing linked, Tier 1) or 'free' (QUEST_GOOGLE_TIER=free).
     On the free tier every Gemini call costs $0, so the budget ledger counts nothing for it."""
-    return "paid" if os.environ.get("QUEST_GOOGLE_TIER", "free").strip().lower() == "paid" else "free"
+    return Q.tier()
 
 
 def estimate_cost(model, input_tokens, output_tokens):
@@ -103,19 +108,67 @@ def estimate_cost(model, input_tokens, output_tokens):
     return (int(input_tokens or 0) / 1_000_000) * pin + (int(output_tokens or 0) / 1_000_000) * pout
 
 
-# Monthly spend cap (USD). 0 / unset (default) = unlimited, feature OFF. When this month's
-# paid spend reaches the cap, generation falls back to the free Google chain below.
-def monthly_budget():
+# ── budget currency ───────────────────────────────────────────────────────────
+# Model prices (and the ledger) are in USD. The budget can be set and shown in the currency you
+# are billed in: QUEST_BUDGET_CURRENCY=SEK + QUEST_USD_RATE=<SEK per 1 USD> (put VAT in the rate,
+# e.g. 10.07 × 1.25, if your bill includes it) + QUEST_MONTHLY_BUDGET=<amount in SEK>.
+_CURRENCY_FMT = {"USD": "${:.2f}", "SEK": "{:.2f} kr", "EUR": "€{:.2f}", "GBP": "£{:.2f}",
+                 "NOK": "{:.2f} kr", "DKK": "{:.2f} kr"}
+
+
+def budget_currency():
+    return (os.environ.get("QUEST_BUDGET_CURRENCY", "USD").strip().upper() or "USD")
+
+
+def usd_rate():
+    """Units of the budget currency per 1 USD (1.0 for USD)."""
+    if budget_currency() == "USD":
+        return 1.0
     try:
+        r = float(os.environ.get("QUEST_USD_RATE", "") or 0)
+    except ValueError:
+        r = 0.0
+    return r if r > 0 else 1.0
+
+
+def money(usd, digits=2):
+    """Format a USD amount in the budget currency, e.g. money(1.5) → '15.11 kr'."""
+    cur = budget_currency()
+    v = float(usd or 0) * usd_rate()
+    fmt = _CURRENCY_FMT.get(cur, "{:.2f} " + cur)
+    return fmt.replace(":.2f", f":.{digits}f").format(v)
+
+
+# Monthly spend cap. 0 / unset (default) = unlimited, feature OFF. Set QUEST_MONTHLY_BUDGET in
+# the budget currency (or the older QUEST_MONTHLY_BUDGET_USD in dollars). Returned in USD, the
+# ledger's unit. When this month's spend reaches it, creation switches to the free tier (with a
+# separate free key, see budget_fallback_models) or pauses.
+def monthly_budget():
+    raw = os.environ.get("QUEST_MONTHLY_BUDGET", "").strip()
+    try:
+        if raw:
+            return float(raw) / usd_rate()
         return float(os.environ.get("QUEST_MONTHLY_BUDGET_USD", "0") or 0)
     except ValueError:
         return 0.0
 
 
+def free_google_key():
+    """API key of a Google project WITHOUT billing (the free tier). Billing is per project, so
+    the paid key can't fall back to free — a second project's key is needed for that."""
+    key = os.environ.get("QUEST_GOOGLE_FREE_API_KEY", "").strip()
+    if not key and Q.env_tier() == "free":           # the main key is already a free one
+        key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY") or ""
+    return key
+
+
 def free_fallback_models():
-    """The free Google model chain used once the monthly paid budget is exhausted."""
-    chain = os.environ.get("QUEST_FREE_FALLBACK_MODELS", "gemini-2.5-flash,gemini-2.5-flash-lite")
-    return [m.strip() for m in chain.split(",") if m.strip()]
+    """The free Google model chain used once the monthly paid budget is exhausted: every Flash
+    model in rotation (20 requests/day each on the free tier)."""
+    chain = os.environ.get("QUEST_FREE_FALLBACK_MODELS", "").strip()
+    if chain:
+        return [m.strip() for m in chain.split(",") if m.strip()]
+    return list(DEFAULT_MODEL_CHAINS["google"])
 
 
 USAGE_FILE = os.environ.get("QUEST_USAGE_FILE", os.path.join("state", "usage.json"))
@@ -164,6 +217,26 @@ def budget_exceeded():
     return cap > 0 and month_spend() >= cap
 
 
+def budget_left():
+    """USD left in this month's budget, or None when no cap is set."""
+    cap = monthly_budget()
+    return max(0.0, cap - month_spend()) if cap > 0 else None
+
+
+def budget_fallback_models():
+    """What generation may still use once the monthly budget is spent: the free Google chain
+    when a free-tier key exists (QUEST_GOOGLE_FREE_API_KEY, or the main key on the free tier).
+    With only a paid key → [] : creation pauses until next month, the library stays playable.
+    Run the fallback inside `free_tier()` so limits, prices and the key all switch to free."""
+    return free_fallback_models() if free_google_key() else []
+
+
+def free_tier():
+    """Context manager: everything inside runs on the free Google project — free-tier limits,
+    $0 prices, and env_api_key('google') returns the free key (also for the story review)."""
+    return Q.use_tier("free")
+
+
 def gen_provider():
     """Pick the model provider from env (QUEST_GEN_PROVIDER), else whichever API key is set."""
     p = os.environ.get("QUEST_GEN_PROVIDER", "").strip().lower()
@@ -196,6 +269,8 @@ def gen_models(provider):
 
 def env_api_key(provider):
     if provider == "google":
+        if Q.tier_override() == "free":             # inside free_tier(): the free project's key
+            return free_google_key()
         return os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY") or ""
     return os.environ.get("ANTHROPIC_API_KEY") or ""
 
@@ -442,10 +517,14 @@ def extract_json(text):
 def call_model(provider, model, system, messages, api_key, usage_sink=None):
     """One completion from the chosen provider. messages: [{'role':'user'|'assistant','content'}].
     Returns the model's text. Raises ImportError if the provider SDK isn't installed.
-    Retries with exponential backoff on 503 / rate-limit errors (free-tier friendly).
+    Server overload (503 / 500 / timeout) is retried PATIENTLY with jittered backoff
+    (≈5 → 10 → 20 → 30 s) for up to `overload_patience()` seconds before giving up on this model,
+    so the best model gets a fair chance before call_with_fallback steps down the chain.
     If `usage_sink` is a list, appends {model, input_tokens, output_tokens, cost_usd} per call."""
-    retryable = ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED", "rate_limit", "overloaded")
-    max_retries, delay = 2, 4   # short per-model backoff; call_with_fallback switches models next
+    retryable = ("503", "500", "429", "UNAVAILABLE", "INTERNAL", "RESOURCE_EXHAUSTED",
+                 "rate_limit", "overloaded", "DEADLINE")
+    patience = overload_patience()
+    waited, delay, attempt = 0.0, 5.0, 0
 
     def _record(tin, tout):
         if usage_sink is not None:
@@ -453,7 +532,8 @@ def call_model(provider, model, system, messages, api_key, usage_sink=None):
                                "output_tokens": int(tout or 0),
                                "cost_usd": estimate_cost(model, tin, tout)})
 
-    for attempt in range(max_retries + 1):
+    while True:
+        attempt += 1
         if Q.tracked(model):                     # free-tier budget: count it, wait, or skip
             ok, why = Q.reserve(model, Q.estimate_tokens(system, messages))
             if not ok:
@@ -468,6 +548,7 @@ def call_model(provider, model, system, messages, api_key, usage_sink=None):
                 )
                 u = getattr(msg, "usage", None)
                 _record(getattr(u, "input_tokens", 0), getattr(u, "output_tokens", 0))
+                Q.note_success(model)
                 return "".join(getattr(b, "text", "") for b in msg.content
                                if getattr(b, "type", "") == "text")
             # default: Google Gemini
@@ -485,25 +566,50 @@ def call_model(provider, model, system, messages, api_key, usage_sink=None):
                 model=model, contents=contents, config=types.GenerateContentConfig(**cfg))
             um = getattr(resp, "usage_metadata", None)
             _record(getattr(um, "prompt_token_count", 0), getattr(um, "candidates_token_count", 0))
+            Q.note_success(model)
             return resp.text or ""
         except Exception as e:
+            err = str(e)
             if Q.tracked(model):
-                Q.note_error(model, str(e))      # learn daily / per-minute limits, missing models
-                if any(k in str(e) for k in ("429", "RESOURCE_EXHAUSTED", "404", "NOT_FOUND")):
+                Q.note_error(model, err)         # learn daily / per-minute limits, overload, 404s
+                if any(k in err for k in ("429", "RESOURCE_EXHAUSTED", "404", "NOT_FOUND")):
                     raise                        # don't burn more quota retrying — next model
-            if attempt < max_retries and any(k in str(e) for k in retryable):
-                time.sleep(delay)
+            if not any(k in err for k in retryable):
+                raise                            # a real error (bad request, auth…) — no retry
+            if Q.is_overload(err):
+                pause = min(delay, 30.0) * random.uniform(0.8, 1.2)
+                if waited + pause > patience:
+                    raise                        # patience used up — next model in the chain
                 delay *= 2
-                continue
-            raise
+            else:                                # untracked model's rate limit: 2 quick retries
+                if attempt > 2:
+                    raise
+                pause = 4.0 * attempt
+            _sleep(pause)
+            waited += pause
+
+
+def overload_patience():
+    """Seconds one model may spend waiting out 503/500 answers before the chain steps down.
+    Default 60 (a player is watching); scripts set QUEST_OVERLOAD_PATIENCE higher."""
+    try:
+        return max(0.0, float(os.environ.get("QUEST_OVERLOAD_PATIENCE", "60")))
+    except ValueError:
+        return 60.0
+
+
+def _sleep(seconds):                             # indirection so tests can skip real waiting
+    time.sleep(seconds)
 
 
 def call_with_fallback(provider, models, system, messages, api_key, log=None, usage_sink=None):
     """Try each model in order; on ANY failure advance to the next one. This is what makes the
     agent survive free-tier limits: when a model's quota is exhausted (or it's unavailable), the
     next model in the chain takes over — models whose free-tier day is already used up are
-    skipped without a call (quota.py). Returns (text, model_used); raises only if all fail."""
+    skipped without a call (quota.py), and models Google is currently overloaded on are tried
+    last. Returns (text, model_used); raises only if all fail."""
     errors, skipped = [], 0
+    models = Q.healthy_first(list(models))
     for i, model in enumerate(models):
         try:
             return call_model(provider, model, system, messages, api_key, usage_sink=usage_sink), model
@@ -515,7 +621,7 @@ def call_with_fallback(provider, models, system, messages, api_key, log=None, us
                     log(f"    ! {model} unavailable ({str(e)[:70]}…) — switching to {models[i + 1]}")
                 continue
             if skipped == len(models):
-                raise RuntimeError(f"free-tier quota for today is used up on every model "
+                raise RuntimeError(f"the daily request quota is used up on every model "
                                    f"({', '.join(models)}); it resets in {Q.format_reset()}") from e
             raise RuntimeError("all configured models failed:\n  " + "\n  ".join(errors)) from e
     raise RuntimeError("no models configured")
@@ -709,12 +815,15 @@ def create_story(*args, **kwargs):
     Also records how many writer/review calls the run took (quota.py uses the average to tell
     players how many more stories today's free tier allows)."""
     stats = {"writer": 0, "review": 0}
+    result = None
     try:
-        return _create_story(*args, _stats=stats, **kwargs)
+        result = _create_story(*args, _stats=stats, **kwargs)
+        return result
     finally:
         if kwargs.get("model_call") is None and (stats["writer"] or stats["review"]):
             try:
-                Q.record_run(stats["writer"], stats["review"])
+                cost = (result[2] or {}).get("cost_usd", 0.0) if result else 0.0
+                Q.record_run(stats["writer"], stats["review"], cost)
             except Exception:
                 pass
 

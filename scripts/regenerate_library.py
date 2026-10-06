@@ -29,6 +29,9 @@ import time
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 os.chdir(ROOT)                               # story_engine uses repo-relative paths
+# Nobody is watching a progress spinner here: wait out Google overload (503) on the best model
+# for up to 5 min before stepping down the chain (the app itself uses 60 s).
+os.environ.setdefault("QUEST_OVERLOAD_PATIENCE", "300")
 
 import story_engine as E  # noqa: E402
 
@@ -111,20 +114,26 @@ def main():
     if not key:
         sys.exit(f"No API key for provider '{provider}' in the environment.")
     if E.budget_exceeded() and not args.ignore_budget:
-        sys.exit(f"This month's generation budget (${E.monthly_budget():.2f}) is already used up "
-                 f"(${E.month_spend():.2f}). Raise QUEST_MONTHLY_BUDGET_USD or pass --ignore-budget.")
+        sys.exit(f"This month's generation budget ({E.money(E.monthly_budget())}) is already used up "
+                 f"({E.money(E.month_spend())}). Raise QUEST_MONTHLY_BUDGET or pass --ignore-budget.")
 
     results, total, not_started = [], 0.0, []
     for i, it in enumerate(items, 1):
-        cap = E.Q.capacity(models, E.review_models(provider))
-        if provider == "google" and cap["stories"] < 1:   # free tier: stop before wasting calls
+        if E.budget_exceeded() and not args.ignore_budget:
             not_started = items[i - 1:]
-            print(f"\n■ Today's free-tier quota is used up ({cap['writer_left']} writer calls left, "
+            print(f"\n■ This month's budget is used up ({E.money(E.month_spend())} of "
+                  f"{E.money(E.monthly_budget())}). Raise QUEST_MONTHLY_BUDGET or pass --ignore-budget.")
+            break
+        cap = E.Q.capacity(models, E.review_models(provider))
+        if provider == "google" and cap["stories"] < 1:   # daily request quota: stop before wasting calls
+            not_started = items[i - 1:]
+            print(f"\n■ Today's request quota is used up ({cap['writer_left']} writer calls left, "
                   f"≈ {cap['avg_writer']} needed per story). It resets in {cap['resets_in_text']} "
                   f"(midnight Pacific).")
             break
         print(f"\n[{i}/{len(items)}] {it['title']}  ({it['difficulty']}, {it['language']})"
-              + (f"  · free tier: ≈ {cap['stories']} stories left today" if provider == "google" else ""))
+              + (f"  · ≈ {cap['stories']} stories left today ({cap['tier']} tier)"
+                 if provider == "google" else ""))
         with E.Q.generation_slot(timeout=1800) as got:   # wait if a player is generating in the app
             if not got:
                 print("    ✗ another generation has held the slot for 30 min — stopping")
@@ -149,21 +158,21 @@ def main():
                        summary.get("tokens_in", 0), summary.get("tokens_out", 0))
         if ok:
             keep_identity(path, it)
-            print(f"    ✓ regenerated — {summary.get('attempts', '?')} model call(s), ≈ ${cost:.3f}")
+            print(f"    ✓ regenerated — {summary.get('attempts', '?')} model call(s), ≈ {E.money(cost, 3)}")
             if E.s3_enabled():
                 s3_ok, detail = E.push_story_to_s3(path)
                 print(("    ✓ s3: " if s3_ok else "    ✗ s3: ") + detail)
         else:
             print(f"    ✗ didn't pass every gate (validate:{summary.get('correctness')} "
                   f"coherence:{summary.get('coherence')} balance:{summary.get('balance')} "
-                  f"story-review:{summary.get('review')}) — old version kept, ≈ ${cost:.3f} spent")
+                  f"story-review:{summary.get('review')}) — old version kept, ≈ {E.money(cost, 3)} spent")
         results.append((it, ok, cost))
 
     print("\n" + "=" * 70)
     for it, ok, cost in results:
-        print(f"  {'✓' if ok else '✗'} {it['file']:44s} ≈ ${cost:.3f}")
+        print(f"  {'✓' if ok else '✗'} {it['file']:44s} ≈ {E.money(cost, 3)}")
     done = sum(1 for _, ok, _ in results if ok)
-    print(f"  {done}/{len(results)} regenerated · total ≈ ${total:.2f}")
+    print(f"  {done}/{len(results)} regenerated · total ≈ {E.money(total, 2)}")
     failed = [it["file"] for it, ok, _ in results if not ok]
     if failed:
         print("  Failed (old version kept): " + ", ".join(failed))

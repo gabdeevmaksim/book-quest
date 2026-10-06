@@ -214,24 +214,38 @@ validates them); don't add a git-push path back for generated stories.
 
 In-app generation is **provider-agnostic** — it auto-selects from whichever key is set, or
 honors `QUEST_GEN_PROVIDER` (`google` | `anthropic`):
-- **Google Gemini** (default, **free tier only** for now): `GOOGLE_API_KEY` (or `GEMINI_API_KEY`).
-  Free-tier limits are tiny and **per model**: each Flash model 5 req/min · 20 req/day; Flash Lite
-  3.5/3.1 15/min · 500/day; per project; reset at midnight Pacific. So the generation chain rotates
-  through every Flash model `gemini-3.8-flash → 3.7 → 3.6 → 3.5 → 3 → 2.5-flash` (≈120 writer
-  calls/day) and the story review uses Flash Lite `gemini-3.5-flash-lite → 3.1-flash-lite →
-  2.5-flash-lite`, so reviews never eat writing quota. `QUEST_GOOGLE_TIER=free` (default) makes
-  Gemini calls cost $0 in the budget ledger; set `paid` if billing is enabled. Pro models are
-  paid-only — don't put them in the chains.
-- **`quota.py`** — the free-tier guard. `call_model` asks `quota.reserve(model)` before every
+- **Google Gemini** (default): `GOOGLE_API_KEY` (or `GEMINI_API_KEY`). `QUEST_GOOGLE_TIER`
+  = `paid` (default — the project has billing, Tier 1) or `free`. It picks the limit table in
+  `quota.py` and whether Gemini calls cost money in the ledger (`MODEL_PRICING`; every chain
+  model must have a price, a test enforces it; 3.8/3.7/3.6 Flash prices double on 2027-01-01).
+  Writer chain `gemini-3.8-flash → 3.7 → 3.6 → 3.5 → 2.5-flash`; review chain Flash Lite
+  `3.5 → 3.1 → 2.5`. Free tier: 20 req/day per Flash model (the chain rotates through them).
+  Tier 1: 1000/min · 10K/day per Flash model — money is the real limit. Pro models: don't.
+- **Budget**: `QUEST_MONTHLY_BUDGET` (in `QUEST_BUDGET_CURRENCY`, converted with
+  `QUEST_USD_RATE` = units per USD; or legacy `QUEST_MONTHLY_BUDGET_USD`) caps monthly spend.
+  The ledger (`state/usage.json`) and `MODEL_PRICING` stay in USD; `money(usd)` formats for
+  display. At the cap, generation runs inside `free_tier()` (`quota.use_tier("free")`
+  contextvar: free limits, $0 prices, separate `free:<model>` counters, and
+  `env_api_key("google")` returns `QUEST_GOOGLE_FREE_API_KEY` — a key from a second Google
+  project without billing, since billing is per project). No free key → creation pauses
+  (`budget_fallback_models()` is empty). The Create page warns that free-tier stories are slower
+  and may be less polished.
+- **Overload (503/500)**: `call_model` retries the same model with jittered backoff (≈5 → 10 →
+  20 → 30 s) for up to `QUEST_OVERLOAD_PATIENCE` s (60 in the app; `story_agent.py` and
+  `regenerate_library.py` default to 300) before `call_with_fallback` steps down the chain.
+  `quota.note_error` counts 5xx: 3 within 5 min → `healthy_first()` puts that model last for
+  3 min; a success clears it.
+- **`quota.py`** — the rate-limit guard. `call_model` asks `quota.reserve(model)` before every
   request to a tracked model: counted → go; per-minute window full → wait (≤ `QUEST_QUOTA_MAX_WAIT`,
   65 s) or skip; day used up → `QuotaSkip`, the fallback chain moves on without a call. 429/404
   answers are learned (`note_error`) and are NOT blindly retried. `generation_slot()` allows one
-  story generation at a time (app + CLI scripts; others queue). `capacity()` = writer calls left
-  ÷ measured average calls per story → the Create page's "≈ N stories left today" counter; a
-  per-player daily cap (`QUEST_STORIES_PER_PLAYER`, default 3, keyed by a hashed IP or the
-  session). State in `state/quota.json` (file-locked; gitignored). Limits table in `quota.py`
-  (copied from AI Studio → Rate limit), override with `QUEST_MODEL_LIMITS` JSON. CLI:
-  `python3 quota.py` (today's usage + capacity), `python3 quota.py --check-models`.
+  story generation at a time (CLI scripts always; the app only on the free tier). `capacity()` =
+  min(writer calls left ÷ avg calls per story, budget left ÷ avg cost per story) with
+  `limited_by` quota|budget → the Create page's "≈ N stories left" counter; a per-player daily
+  cap (`QUEST_STORIES_PER_PLAYER`, default 3, keyed by a hashed IP or the session). State in
+  `state/quota.json` (file-locked; gitignored). Limit tables in `quota.py` (copied from AI
+  Studio → Rate limit), override with `QUEST_MODEL_LIMITS` JSON. CLI: `python3 quota.py`
+  (usage, budget, capacity), `python3 quota.py check-models`.
 - **Anthropic Claude**: `ANTHROPIC_API_KEY`; chain `claude-sonnet-4-6 → claude-haiku-4-5-20251001`.
 
 **Model fallback:** generation tries the models in order and auto-advances to the next when one

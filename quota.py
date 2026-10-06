@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
 """
-quota.py — keeps Quest Book inside the Gemini API free-tier limits.
+quota.py — keeps Quest Book inside the Gemini API rate limits (free tier or paid Tier 1).
 
-The free tier gives every model its OWN small budget (AI Studio → Rate limit, project
-book-quest). Text models, as of 2026-10-04:
+QUEST_GOOGLE_TIER picks the table: "paid" (default — billing linked, Tier 1) or "free".
+Every model has its OWN budget (AI Studio → Rate limit, project book-quest):
 
-    Flash 3.8 / 3.7 / 3.6 / 3.5 / 3 / 2.5   5 req/min   250K input tok/min    20 req/day  (each)
+  Free tier (2026-10-04)
+    Flash 3.8 / 3.7 / 3.6 / 3.5 / 2.5       5 req/min   250K input tok/min    20 req/day  (each)
     Flash Lite 3.5 / 3.1                    15 req/min   250K input tok/min   500 req/day  (each)
     Flash Lite 2.5                          10 req/min   250K input tok/min    20 req/day
     Pro models                               0 (paid only)
+  Tier 1 (2026-10-06)
+    Flash 3.8 / 3.7 / 3.6 / 3.5           1000 req/min    2M tok/min       10 000 req/day
+    Flash 2.5                             1000 req/min    1M tok/min       10 000 req/day
+    Flash Lite                            4000 req/min    4M tok/min      150 000 req/day
+
+On Tier 1 the request limits are far away; the real stop is money (QUEST_MONTHLY_BUDGET_USD),
+so capacity() also divides the budget left by the measured cost per story. Google's servers
+do get overloaded (503): note_error() remembers a streak of 5xx answers and healthy_first()
+moves such a model to the back of the chain for a few minutes.
 
 Limits are per PROJECT (extra keys in the same project don't add quota) and the daily counters
 reset at MIDNIGHT PACIFIC TIME.
@@ -38,6 +48,7 @@ CLI:  python3 quota.py                 # today's usage per model + capacity
       python3 quota.py check-models    # same (use this form through `docker compose exec`)
 """
 import contextlib
+import contextvars
 import datetime
 import json
 import math
@@ -57,14 +68,32 @@ except Exception:                                   # no tz database → DST rul
 
 _FLASH = {"rpm": 5, "tpm": 250_000, "rpd": 20}
 _LITE = {"rpm": 15, "tpm": 250_000, "rpd": 500}
-DEFAULT_LIMITS = {
+FREE_LIMITS = {
     "gemini-3.8-flash": _FLASH, "gemini-3.7-flash": _FLASH, "gemini-3.6-flash": _FLASH,
-    "gemini-3.5-flash": _FLASH, "gemini-3-flash": _FLASH, "gemini-2.5-flash": _FLASH,
+    "gemini-3.5-flash": _FLASH, "gemini-2.5-flash": _FLASH,
     "gemini-3.5-flash-lite": _LITE, "gemini-3.1-flash-lite": _LITE,
     "gemini-2.5-flash-lite": {"rpm": 10, "tpm": 250_000, "rpd": 20},
 }
+# Tier 1 (billing linked), AI Studio → Rate limit, 2026-10-06. Google also caps Tier 1 spend
+# at $250/month; the app's own cap is QUEST_MONTHLY_BUDGET_USD.
+_T1_FLASH = {"rpm": 1000, "tpm": 2_000_000, "rpd": 10_000}
+_T1_LITE = {"rpm": 4000, "tpm": 4_000_000, "rpd": 150_000}
+TIER1_LIMITS = {
+    "gemini-3.8-flash": _T1_FLASH, "gemini-3.7-flash": _T1_FLASH, "gemini-3.6-flash": _T1_FLASH,
+    "gemini-3.5-flash": _T1_FLASH,
+    "gemini-2.5-flash": {"rpm": 1000, "tpm": 1_000_000, "rpd": 10_000},
+    "gemini-3.5-flash-lite": _T1_LITE, "gemini-3.1-flash-lite": _T1_LITE,
+    "gemini-2.5-flash-lite": _T1_LITE,
+}
+DEFAULT_LIMITS = FREE_LIMITS        # kept for backwards compatibility (tests, imports)
 DEFAULT_AVG_WRITER_CALLS = 3.0      # draft + ~2 repairs, until real runs are measured
 DEFAULT_AVG_REVIEW_CALLS = 1.5
+DEFAULT_AVG_COST_USD = 0.08         # per story on paid Gemini Flash, until real runs are measured
+# Overload circuit breaker: this many 5xx answers from a model within OVERLOAD_WINDOW seconds
+# → it goes to the back of the chain for OVERLOAD_COOLDOWN seconds (the next player starts on a
+# healthy model instead of waiting through the same retries).
+OVERLOAD_STREAK, OVERLOAD_WINDOW, OVERLOAD_COOLDOWN = 3, 300, 180
+_OVERLOAD_MARKERS = ("503", "500", "unavailable", "overloaded", "internal", "deadline")
 
 
 class QuotaSkip(Exception):
@@ -72,8 +101,44 @@ class QuotaSkip(Exception):
 
 
 # ── config ────────────────────────────────────────────────────────────────────
+_TIER = contextvars.ContextVar("quest_google_tier", default=None)
+
+
+def env_tier():
+    """The configured tier of the main Google key: 'paid' (default — billing linked, Tier 1) or
+    'free' (QUEST_GOOGLE_TIER=free)."""
+    return "free" if os.environ.get("QUEST_GOOGLE_TIER", "paid").strip().lower() == "free" else "paid"
+
+
+def tier_override():
+    return _TIER.get()
+
+
+def tier():
+    """The tier in effect right now: a `use_tier()` override, else the configured one. Picks the
+    limit table here and the prices in story_engine.estimate_cost."""
+    return _TIER.get() or env_tier()
+
+
+@contextlib.contextmanager
+def use_tier(name):
+    """Run a block on another tier — used to fall back to the free Google project once the
+    monthly budget is spent. Free-tier counters are kept apart from paid ones ('free:<model>')."""
+    token = _TIER.set(name)
+    try:
+        yield
+    finally:
+        _TIER.reset(token)
+
+
+def _k(model):
+    """State key: free-tier calls go to a different Google project, so they get own counters."""
+    return f"free:{model}" if tier() == "free" else model
+
+
 def limits():
-    lim = {k: dict(v) for k, v in DEFAULT_LIMITS.items()}
+    base = FREE_LIMITS if tier() == "free" else TIER1_LIMITS
+    lim = {k: dict(v) for k, v in base.items()}
     extra = os.environ.get("QUEST_MODEL_LIMITS", "").strip()
     if extra:
         try:
@@ -170,7 +235,7 @@ def _state(now=None, write=True):
 
 
 def _model(data, model):
-    return data["models"].setdefault(model, {"rpd": 0, "minute": [], "tokens": [],
+    return data["models"].setdefault(_k(model), {"rpd": 0, "minute": [], "tokens": [],
                                              "exhausted": False, "cooldown_until": 0, "why": ""})
 
 
@@ -232,13 +297,50 @@ def note_error(model, message, clock=time.time):
                 m["cooldown_until"] = t + 60
         elif "404" in msg or "not found" in msg or "not supported" in msg:
             m["exhausted"], m["why"] = True, "model not available to this key"
+        elif is_overload(msg):                           # Google-side 5xx: remember the streak
+            o = [x for x in m.get("overloads", []) if t - x < OVERLOAD_WINDOW] + [t]
+            m["overloads"] = o[-10:]
+            if len(o) >= OVERLOAD_STREAK:
+                m["overloaded_until"] = t + OVERLOAD_COOLDOWN
+
+
+def is_overload(message):
+    """A temporary server-side error (503 overloaded, 500 internal, timeout) — worth retrying."""
+    msg = (message or "").lower()
+    return any(k in msg for k in _OVERLOAD_MARKERS)
+
+
+def note_success(model):
+    """A call went through — clear the model's overload streak."""
+    if not tracked(model):
+        return
+    with _state() as d:
+        m = _model(d, model)
+        if m.get("overloads") or m.get("overloaded_until"):
+            m["overloads"], m["overloaded_until"] = [], 0
+
+
+def overloaded(model, now=None):
+    t = time.time() if now is None else now
+    with _state(t, write=False) as d:
+        return d["models"].get(_k(model), {}).get("overloaded_until", 0) > t
+
+
+def healthy_first(models, now=None):
+    """Same chain, but models that are overloaded right now move to the back (still tried if
+    everything else fails)."""
+    t = time.time() if now is None else now
+    with _state(t, write=False) as d:
+        bad = {m for m in models if d["models"].get(_k(m), {}).get("overloaded_until", 0) > t}
+    return [m for m in models if m not in bad] + [m for m in models if m in bad]
 
 
 # ── capacity / stats ──────────────────────────────────────────────────────────
-def record_run(writer_calls, review_calls):
-    """Remember how many calls one generation run took (feeds the per-story average)."""
+def record_run(writer_calls, review_calls, cost_usd=0.0):
+    """Remember how many calls (and dollars) one generation run took (feeds the averages)."""
     with _state() as d:
-        d["runs"] = (d.get("runs", []) + [[int(writer_calls), int(review_calls)]])[-30:]
+        run = [int(writer_calls), int(review_calls), round(float(cost_usd or 0.0), 6)]
+        d["runs"] = (d.get("runs", []) + [run])[-30:]
 
 
 def averages():
@@ -250,6 +352,13 @@ def averages():
             max(0.0, sum(r[1] for r in runs) / len(runs)))
 
 
+def average_cost():
+    """Average USD per generation run, measured on paid runs (default until 3 are recorded)."""
+    with _state(write=False) as d:
+        costs = [r[2] for r in d.get("runs", []) if len(r) > 2 and r[2] > 0]
+    return sum(costs) / len(costs) if len(costs) >= 3 else DEFAULT_AVG_COST_USD
+
+
 def remaining(models, now=None):
     """Requests still available today across `models` (tracked ones only)."""
     lim = limits()
@@ -258,19 +367,28 @@ def remaining(models, now=None):
         for model in models:
             if model not in lim:
                 continue
-            m = d["models"].get(model, {})
+            m = d["models"].get(_k(model), {})
             if not m.get("exhausted"):
                 left += max(0, lim[model]["rpd"] - m.get("rpd", 0))
     return left
 
 
-def capacity(writer_models, review_models=(), now=None):
-    """≈ how many more stories can be generated today on the free tier."""
+def capacity(writer_models, review_models=(), now=None, budget_left=None):
+    """≈ how many more stories can be generated: today's request limits, and — when
+    `budget_left` (USD left this month) is given — what the remaining budget pays for.
+    `limited_by` says which one binds: "quota" (resets at midnight Pacific) or "budget"."""
     aw, ar = averages()
     wl, rl = remaining(writer_models, now), remaining(review_models, now)
-    return {"stories": int(math.floor(wl / aw)) if aw else 0, "writer_left": wl, "review_left": rl,
-            "avg_writer": round(aw, 1), "avg_review": round(ar, 1),
-            "resets_in": seconds_until_reset(now), "resets_in_text": format_reset(now)}
+    by_quota = int(math.floor(wl / aw)) if aw else 0
+    avg_cost = average_cost()
+    stories, limited_by = by_quota, "quota"
+    if budget_left is not None:
+        by_budget = int(math.floor(max(0.0, budget_left) / avg_cost + 1e-9)) if avg_cost > 0 else by_quota
+        if by_budget < by_quota:
+            stories, limited_by = by_budget, "budget"
+    return {"stories": stories, "limited_by": limited_by, "writer_left": wl, "review_left": rl,
+            "avg_writer": round(aw, 1), "avg_review": round(ar, 1), "avg_cost": round(avg_cost, 4),
+            "tier": tier(), "resets_in": seconds_until_reset(now), "resets_in_text": format_reset(now)}
 
 
 def client_used(client_id, now=None):
@@ -290,9 +408,9 @@ def record_client(client_id, now=None):
 def usage(now=None):
     lim = limits()
     with _state(now, write=False) as d:
-        return {k: {"used": d["models"].get(k, {}).get("rpd", 0), "limit": v["rpd"],
-                    "rpm": v["rpm"], "exhausted": d["models"].get(k, {}).get("exhausted", False),
-                    "why": d["models"].get(k, {}).get("why", "")} for k, v in lim.items()}
+        return {k: {"used": d["models"].get(_k(k), {}).get("rpd", 0), "limit": v["rpd"],
+                    "rpm": v["rpm"], "exhausted": d["models"].get(_k(k), {}).get("exhausted", False),
+                    "why": d["models"].get(_k(k), {}).get("why", "")} for k, v in lim.items()}
 
 
 # ── one generation at a time ──────────────────────────────────────────────────
@@ -337,18 +455,27 @@ def main(argv):
             for m in chain:
                 print(f"  {'✓' if m in names else '✗ NOT AVAILABLE'}  {role:8s} {m}")
         return
-    cap = capacity(writer, reviewer)
+    budget_left = E.budget_left()
+    cap = capacity(writer, reviewer, budget_left=budget_left)
     u = usage()
-    print(f"Gemini free tier — today (Pacific {quota_day()}), resets in {cap['resets_in_text']}")
+    print(f"Gemini {tier()} tier — today (Pacific {quota_day()}), resets in {cap['resets_in_text']}")
     for role, chain in (("writer", writer), ("reviewer", reviewer)):
         for m in chain:
             if m in u:
                 x = u[m]
                 flag = f"  OFF: {x['why']}" if x["exhausted"] else ""
-                print(f"  {role:8s} {m:24s} {x['used']:>4}/{x['limit']:<4} today  ({x['rpm']}/min){flag}")
+                flag += "  (overloaded — tried last for now)" if overloaded(m) else ""
+                print(f"  {role:8s} {m:24s} {x['used']:>5}/{x['limit']:<6} today  ({x['rpm']}/min){flag}")
     print(f"\n  writer calls left {cap['writer_left']} · review calls left {cap['review_left']} · "
-          f"avg per story {cap['avg_writer']} + {cap['avg_review']}")
-    print(f"  ≈ {cap['stories']} more stor{'y' if cap['stories'] == 1 else 'ies'} can be created today")
+          f"avg per story {cap['avg_writer']} + {cap['avg_review']} calls, ≈ {E.money(cap['avg_cost'], 3)}")
+    if budget_left is not None:
+        print(f"  monthly budget: {E.money(E.month_spend())} of {E.money(E.monthly_budget())} spent")
+    when = "this month (budget)" if cap["limited_by"] == "budget" else "today"
+    print(f"  ≈ {cap['stories']} more stor{'y' if cap['stories'] == 1 else 'ies'} can be created {when}")
+    if tier() == "paid" and E.free_google_key():
+        with use_tier("free"):
+            fcap = capacity(E.free_fallback_models(), reviewer)
+        print(f"  free backup project (after the budget): ≈ {fcap['stories']} stories left today")
 
 
 if __name__ == "__main__":

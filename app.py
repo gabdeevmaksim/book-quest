@@ -152,9 +152,10 @@ from story_engine import (  # Streamlit-free core (shared with story_agent.py)
     validate_story_dict, balance_check, generate_story_api,
     gen_models, create_story,
     s3_enabled, push_story_to_s3, sync_stories_from_s3,
-    monthly_budget, month_spend, budget_exceeded, record_spend, free_fallback_models,
-    review_models,
+    monthly_budget, month_spend, budget_exceeded, record_spend, budget_fallback_models,
+    budget_left, review_models, free_tier, money,
 )
+import contextlib
 import urllib.parse
 
 import feedback   # player feedback: file + Telegram (Streamlit-free, see feedback.py)
@@ -867,25 +868,36 @@ def show_library():
 
 def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model,
                  language="English", language_level="C2"):
-    # Monthly budget policy: while under the cap, use the owner's chosen (paid) model first,
-    # with the provider chain as automatic fallback. Once this month's paid spend reaches the
-    # cap, switch generation to the FREE Google chain; if there's no Google key for that
-    # backup, pause creation (the library stays fully playable). create_story runs the FULL
-    # gated pipeline (validate -> coherence -> balance, with repair) and only returns ok=True
-    # once every gate passes.
-    capped = False
-    if budget_exceeded():
-        google_key = env_api_key("google")
-        if not google_key:
+    # Monthly budget policy: while under the cap, use the owner's chosen model first, with the
+    # provider chain as automatic fallback. Once this month's spend reaches the cap, generation
+    # moves to the FREE Google project (QUEST_GOOGLE_FREE_API_KEY — billing is per project, so
+    # the paid key can't do it): free-tier limits, $0, one story at a time. Without a free key
+    # creation pauses until next month — the library stays fully playable. create_story runs
+    # the FULL gated pipeline (validate -> coherence -> balance -> review, with repair).
+    capped = budget_exceeded()
+    if capped:
+        fallback = budget_fallback_models()
+        if not fallback:
             return {"ok": False, "capped_blocked": True,
                     "spend": round(month_spend(), 2), "budget": round(monthly_budget(), 2)}
-        capped, provider, api_key = True, "google", google_key
-        models = free_fallback_models()
+        provider, models = "google", fallback
     else:
         models = [model] + [m for m in gen_models(provider) if m != model]
+    with (free_tier() if capped else contextlib.nullcontext()):
+        if capped:
+            api_key = env_api_key("google")      # the free project's key (inside free_tier)
+        return _run_generation(theme, difficulty, length, title_hint, api_key, provider, models,
+                               capped, language, language_level)
+
+
+def _run_generation(theme, difficulty, length, title_hint, api_key, provider, models, capped,
+                    language, language_level):
     # Free tier: one generation at a time (Flash models allow only 5 requests/minute), so
     # simultaneous players queue for up to ~2.5 min instead of tripping the per-minute limit.
-    with Q.generation_slot(timeout=150) as got:
+    # Paid tier (1000/min): players generate in parallel.
+    one_at_a_time = provider == "google" and Q.tier() == "free"
+    slot = Q.generation_slot(timeout=150) if one_at_a_time else contextlib.nullcontext(True)
+    with slot as got:
         if not got:
             return {"ok": False, "busy": True}
         Q.record_client(player_id())             # counts toward the per-player daily cap
@@ -899,7 +911,7 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
             return {"ok": False, "errors": [f"The '{pkg}' Python package isn't installed. "
                                             f"Install it with:  pip install {pkg}"]}
         except Exception as e:
-            if "free-tier quota" in str(e):
+            if "quota is used up" in str(e):
                 return {"ok": False, "quota_out": True, "resets_in": Q.format_reset()}
             return {"ok": False, "errors": [f"Generation failed: {e}"]}
 
@@ -963,10 +975,10 @@ def show_create_page():
     if res is not None:
         if res.get("busy") or res.get("quota_out"):
             if res.get("busy"):
-                st.warning("Another story is being created right now — the free tier allows one at "
-                           "a time. Please try again in a minute or two.")
+                st.warning("Another story is being created right now — only one can be made at a "
+                           "time. Please try again in a minute or two.")
             else:
-                st.warning("Today's free story-creation quota ran out while your story was being "
+                st.warning("Today's story-creation quota ran out while your story was being "
                            f"written. New stories can be created again in {res.get('resets_in')} "
                            "(midnight Pacific). You can still play every story in the library.")
             c1, c2 = st.columns(2)
@@ -980,8 +992,8 @@ def show_create_page():
             return
         if res.get("capped_blocked"):
             st.error("✨ New-story creation is paused — this month's generation budget "
-                     f"(${res.get('budget', '?')}) is used up and no free backup key is "
-                     "configured. You can still play every story in the library.")
+                     f"({money(res.get('budget'))}) is used up. It starts again next month. "
+                     "You can still play every story in the library.")
             if st.button("📚  Back to library", use_container_width=True):
                 st.session_state.screen = "library"
                 st.session_state.pop("gen_result", None)
@@ -993,10 +1005,12 @@ def show_create_page():
             st.caption("Passed every gate: validate ✓ · coherence ✓ · balance PASS · story review "
                        + {"OK": "✓", "skipped": "skipped", "off": "off"}.get(_rv, str(_rv)))
             if res.get("capped"):
-                st.info("Made with the **free model** — this month's premium budget is used up.")
+                st.info("Made on the **free tier** — this month's budget is used up, so stories "
+                        "take longer and may be a little less polished until next month.")
             if res.get("cost_usd") is not None:
-                st.caption(f"💸 cost ≈ ${res['cost_usd']:.4f} · {res.get('attempts', '?')} model "
-                           f"call(s) · month-to-date ${res.get('spend', '?')}/{res.get('budget', '?')}")
+                st.caption(f"💸 cost ≈ {money(res['cost_usd'], 3)} · {res.get('attempts', '?')} model "
+                           f"call(s)" + (f" · month-to-date {money(res.get('spend'))} / "
+                                         f"{money(res.get('budget'))}" if res.get('budget') else ""))
             _show_push_status(res)
             for ln in res.get("vlines", []):
                 st.caption(f"· {ln}")
@@ -1014,10 +1028,12 @@ def show_create_page():
                 st.caption(f"A model limit was hit mid-run ({str(res['limit'])[:100]}…), so it stopped early.")
             st.caption("It's in your library marked **DRAFT** — playable now, or regenerate later for a clean version.")
             if res.get("capped"):
-                st.info("Made with the **free model** — this month's premium budget is used up.")
+                st.info("Made on the **free tier** — this month's budget is used up, so stories "
+                        "take longer and may be a little less polished until next month.")
             if res.get("cost_usd") is not None:
-                st.caption(f"💸 cost ≈ ${res['cost_usd']:.4f} · {res.get('attempts', '?')} model "
-                           f"call(s) · month-to-date ${res.get('spend', '?')}/{res.get('budget', '?')}")
+                st.caption(f"💸 cost ≈ {money(res['cost_usd'], 3)} · {res.get('attempts', '?')} model "
+                           f"call(s)" + (f" · month-to-date {money(res.get('spend'))} / "
+                                         f"{money(res.get('budget'))}" if res.get('budget') else ""))
             _show_push_status(res)
             for ln in res.get("vlines", []):
                 st.caption(f"· {ln}")
@@ -1046,14 +1062,20 @@ def show_create_page():
         "and ready to play."
         "</div>", unsafe_allow_html=True)
 
-    if monthly_budget() > 0:
-        if budget_exceeded():
-            st.warning("This month's premium story budget is used up — new stories are created "
-                       "with the **free model** (it may be slower or occasionally unavailable). "
-                       "You can always play any story in the library.")
+    # Budget state: under the cap → paid models; over it → the free tier (if a free key is
+    # configured) or paused until next month.
+    on_free_backup = budget_paused = False
+    if monthly_budget() > 0 and budget_exceeded():
+        if budget_fallback_models():
+            on_free_backup = True
+            st.info("🐢 This month's story budget is used up, so new stories are now written on the "
+                    "**free tier** until next month: creating one **takes longer** (players take turns, "
+                    "one story at a time) and the result **may be a little less polished**. "
+                    "You can always play any story in the library.")
         else:
-            st.caption(f"Story-generation budget this month: ${month_spend():.2f} / "
-                       f"${monthly_budget():.2f} used.")
+            budget_paused = True
+            st.warning("✨ This month's story-creation budget is used up, so creating new stories "
+                       "is paused until next month. You can still play every story in the library.")
 
     theme = st.text_input("Theme / setting",
                           placeholder="e.g. Pirate ghost ship · Cyberpunk heist · Norse myth · Haunted Mars colony")
@@ -1083,23 +1105,39 @@ def show_create_page():
         st.info("✨ Story generation is currently unavailable — the site owner hasn't configured "
                 "a generation key yet. You can still play every story in the library.")
 
-    # free-tier capacity: how many more stories today, and this player's share
-    blocked = False
-    if api_key and provider == "google":
-        cap = Q.capacity(gen_models(provider), review_models(provider))
+    # capacity: how many more stories (daily request limits and, on a paid key, the money left
+    # in this month's budget), and this player's daily share
+    blocked = budget_paused
+    if api_key and provider == "google" and not budget_paused:
+        if on_free_backup:
+            with free_tier():
+                cap = Q.capacity(budget_fallback_models(), review_models(provider))
+        else:
+            # with a free backup the budget never blocks (the next story after the cap goes free)
+            cap = Q.capacity(gen_models(provider), review_models(provider),
+                             budget_left=None if budget_fallback_models() else budget_left())
         used, per_player = Q.client_used(player_id()), Q.stories_per_player()
-        n = cap["stories"]
-        st.caption(f"🔋 Free tier today: about **{n}** new stor{'y' if n == 1 else 'ies'} can still be "
-                   f"created · you've made {used}/{per_player} · resets in {cap['resets_in_text']} "
-                   f"(midnight Pacific)")
+        n, s = cap["stories"], "y" if cap["stories"] == 1 else "ies"
+        if cap["limited_by"] == "budget":
+            st.caption(f"🔋 About **{n}** new stor{s} left in this month's budget · "
+                       f"you've made {used}/{per_player} today")
+        else:
+            st.caption(f"🔋 About **{n}** new stor{s} can still be created today · you've made "
+                       f"{used}/{per_player} · resets in {cap['resets_in_text']} (midnight Pacific)")
         if n < 1:
             blocked = True
-            st.warning(f"Today's free story-creation quota is used up — new stories can be created "
-                       f"again in {cap['resets_in_text']}. You can still play every story in the library.")
+            if cap["limited_by"] == "budget":
+                st.warning("This month's story-creation budget is almost used up, so creating new "
+                           "stories is paused until next month. You can still play every story in "
+                           "the library.")
+            else:
+                st.warning(f"Today's story-creation quota is used up — new stories can be created "
+                           f"again in {cap['resets_in_text']}. You can still play every story in "
+                           f"the library.")
         elif used >= per_player:
             blocked = True
             st.info(f"You've created {per_player} stories today — that's the daily limit per player, "
-                    f"so everyone gets a turn on the free tier. Come back in {cap['resets_in_text']}.")
+                    f"so everyone gets a turn. Come back in {cap['resets_in_text']}.")
 
     if st.button("✨  Generate Story", use_container_width=True,
                  disabled=not theme.strip() or not api_key or blocked):

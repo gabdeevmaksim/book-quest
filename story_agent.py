@@ -27,10 +27,14 @@ Usage:
 
 Run from the repository root. Exit code 0 = a fully game-ready story was produced / passed.
 """
+import os
 import sys
 import argparse
 
-import story_engine as E
+# CLI run: wait out Google overload (503) on the best model up to 5 min (the app uses 60 s).
+os.environ.setdefault("QUEST_OVERLOAD_PATIENCE", "300")
+
+import story_engine as E  # noqa: E402
 
 
 def _gates_line(s):
@@ -50,7 +54,7 @@ def audit(path, difficulty, with_review=False):
         if rv["status"] == "REVIEW":
             ok = False
             feedback.append("NARRATIVE — " + " | ".join(E.NR.feedback_lines(rv)))
-        print(f"  story review: {rv['status']} ({rv['detail']}) · ≈ ${sum(u['cost_usd'] for u in usage):.4f}")
+        print(f"  story review: {rv['status']} ({rv['detail']}) · ≈ {E.money(sum(u['cost_usd'] for u in usage), 4)}")
     print("  " + _gates_line(summary))
     for ln in summary["bal_lines"]:
         print("    " + ln)
@@ -124,11 +128,14 @@ def main():
           f"language={args.lang} ({args.level})  "
           f"provider={E.PROVIDER_LABEL.get(provider, provider)}")
     print(f"  model chain (auto-fallback on limit): {' → '.join(models)}")
+    if E.budget_exceeded():
+        sys.exit(f"This month's generation budget is used up ({E.money(E.month_spend())} of "
+                 f"{E.money(E.monthly_budget())}) — raise QUEST_MONTHLY_BUDGET to continue.")
     if provider == "google":
         cap = E.Q.capacity(models, E.review_models(provider))
-        print(f"  free tier today: ≈ {cap['stories']} stories left · resets in {cap['resets_in_text']}")
+        print(f"  {cap['tier']} tier today: ≈ {cap['stories']} stories left · resets in {cap['resets_in_text']}")
         if cap["stories"] < 1:
-            sys.exit("Today's free-tier quota is used up — try again after the reset (midnight Pacific).")
+            sys.exit("Today's request quota is used up — try again after the reset (midnight Pacific).")
     with E.Q.generation_slot(timeout=1800) as got:       # one generation at a time (app + CLI)
         if not got:
             sys.exit("Another story generation has been running for 30 min — try again later.")
@@ -141,7 +148,7 @@ def main():
     if summary and summary.get("cost_usd") is not None:
         E.record_spend(summary.get("cost_usd", 0.0), summary.get("model_used", ""),
                        summary.get("tokens_in", 0), summary.get("tokens_out", 0))
-        print(f"\n  cost ≈ ${summary['cost_usd']:.4f}  ({summary.get('attempts', '?')} call(s), "
+        print(f"\n  cost ≈ {E.money(summary['cost_usd'], 4)}  ({summary.get('attempts', '?')} call(s), "
               f"{summary.get('tokens_in', 0)}+{summary.get('tokens_out', 0)} tok, "
               f"model {summary.get('model_used', '?')})")
 
