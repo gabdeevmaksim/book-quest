@@ -66,6 +66,11 @@ def pass_probability(dice, need):
     return sum(1 for t in totals if t >= need) / len(totals)
 
 
+def min_roll(dice):
+    n, _ = parse_dice(dice)
+    return n
+
+
 def max_roll(dice):
     n, s = parse_dice(dice)
     return n * s
@@ -97,6 +102,18 @@ def monster_odds(monster, attributes):
     return pass_probability(monster.get("dice_type", DEFAULT_DICE), monster.get("strength", 0) - a)
 
 
+def check_is_sure(cond, attributes, inventory=()):
+    """True when the hero passes even with the lowest possible roll — no dice needed."""
+    bonus, _ = item_bonus(cond, inventory)
+    a = (attributes or {}).get(cond.get("attribute", "strength"), 0)
+    return min_roll(cond.get("dice_type", DEFAULT_DICE)) + a + bonus >= cond.get("check_value", 0)
+
+
+def monster_is_sure(monster, attributes):
+    a = (attributes or {}).get(monster.get("attribute", "strength"), 0)
+    return min_roll(monster.get("dice_type", DEFAULT_DICE)) + a >= monster.get("strength", 0)
+
+
 def legacy_fail_target(choice):
     """Old stories only: where a failed check used to send the hero (None for new stories)."""
     return choice.get("fail_target") or (choice.get("condition") or {}).get("fail_target")
@@ -119,15 +136,16 @@ def resolve_check(cond, attributes, inventory=(), roll=None, rng=random):
     """Resolve one attribute check. Returns a result dict; the caller applies the damage and
     moves the hero (see check_destination)."""
     dice = cond.get("dice_type", DEFAULT_DICE)
-    r = roll if roll is not None else roll_dice(dice, rng)
     attr = cond.get("attribute", "strength")
     a = (attributes or {}).get(attr, 0)
     bonus, bitem = item_bonus(cond, inventory)
+    auto = check_is_sure(cond, attributes, inventory)    # strong enough: no roll at all
+    r = roll if roll is not None else (min_roll(dice) if auto else roll_dice(dice, rng))
     total = r + a + bonus
     dc = cond.get("check_value", 0)
     passed = total >= dc
     return {
-        "kind": "check", "passed": passed, "roll": r, "dice": dice,
+        "kind": "check", "passed": passed, "roll": r, "dice": dice, "auto": auto,
         "attribute": attr, "attr_value": a, "bonus": bonus, "bonus_item": bitem,
         "total": total, "dc": dc,
         "damage": 0 if passed else int(cond.get("fail_damage", DEFAULT_CHECK_DAMAGE) or 0),
@@ -148,14 +166,15 @@ def check_destination(choice, passed):
 def resolve_monster(monster, attributes, roll=None, rng=random):
     """Resolve a whole monster encounter with one roll. Win or lose, the encounter ends."""
     dice = monster.get("dice_type", DEFAULT_DICE)
-    r = roll if roll is not None else roll_dice(dice, rng)
     attr = monster.get("attribute", "strength")
     a = (attributes or {}).get(attr, 0)
+    auto = monster_is_sure(monster, attributes)
+    r = roll if roll is not None else (min_roll(dice) if auto else roll_dice(dice, rng))
     total = r + a
     dc = monster.get("strength", 0)
     passed = total >= dc
     return {
-        "kind": "monster", "passed": passed, "roll": r, "dice": dice,
+        "kind": "monster", "passed": passed, "roll": r, "dice": dice, "auto": auto,
         "attribute": attr, "attr_value": a, "bonus": 0, "bonus_item": None,
         "total": total, "dc": dc, "name": monster.get("name", ""),
         "damage": 0 if passed else int(monster.get("fail_damage", DEFAULT_MONSTER_DAMAGE) or 0),

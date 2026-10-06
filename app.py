@@ -158,22 +158,28 @@ from story_engine import (  # Streamlit-free core (shared with story_agent.py)
 import contextlib
 import urllib.parse
 
+import visits     # visit / unique-visitor counter (SQLite in state/, salted hashes only)
 import feedback   # player feedback: file + Telegram (Streamlit-free, see feedback.py)
 import quota as Q  # Gemini free-tier limits: per-model counters, capacity, one-at-a-time slot
 import hashlib
 import uuid
 
 
-def player_id():
-    """Anonymous per-player key for the daily story cap: a short hash of the IP address when
-    Streamlit exposes it, else a per-browser-session id (kept across navigation)."""
+def client_ip():
+    """The visitor's IP address if Streamlit exposes it (never stored as-is), else None."""
     ctx = getattr(st, "context", None)
-    ip = None
     try:
         ip = getattr(ctx, "ip_address", None) or \
             ((ctx.headers.get("X-Forwarded-For") or "").split(",")[0].strip() if ctx else None)
     except Exception:
         ip = None
+    return ip if isinstance(ip, str) and ip else None
+
+
+def player_id():
+    """Anonymous per-player key for the daily story cap: a short hash of the IP address when
+    Streamlit exposes it, else a per-browser-session id (kept across navigation)."""
+    ip = client_ip()
     if ip:
         return "ip:" + hashlib.sha256(ip.encode()).hexdigest()[:16]
     if not st.session_state.get("fbmeta_player"):
@@ -384,8 +390,10 @@ def pass_probability(dice_type, need):
 
 
 def odds_label(dice_type, check_value, attr_val, bonus=0):
-    pct = round(pass_probability(dice_type, check_value - attr_val - bonus) * 100)
-    return f"≈{pct}%"
+    p = pass_probability(dice_type, check_value - attr_val - bonus)
+    if p >= 1:
+        return "✓ sure, no roll"
+    return f"≈{min(99, round(p * 100))}%"
 
 
 def animate_roll(placeholder, dice_type="1d6"):
@@ -520,7 +528,11 @@ def take_choice(choice, story):
     """A choice button was clicked: checks wait for the dice, everything else moves at once."""
     st.session_state.last_outcome = None
     if "condition" in choice:
-        st.session_state.pending_choice = choice
+        if R.check_is_sure(choice["condition"], st.session_state.attributes,
+                           st.session_state.get("inventory", [])):
+            resolve_choice(choice, story)        # strong enough: straight through, no dice
+        else:
+            st.session_state.pending_choice = choice
     else:
         apply_choice_target(choice, story)
 
@@ -564,7 +576,10 @@ def _record_outcome(res, story):
     """Apply a resolved challenge: lose HP on failure, log it, and keep it for the outcome card."""
     st.session_state.hp -= res["damage"]
     bonus_txt = f"+{res['bonus']}({item_name(story, res['bonus_item'])})" if res["bonus"] else ""
-    math = f"{res['roll']}+{res['attr_value']}{bonus_txt}={res['total']} vs DC {res['dc']}"
+    if res.get("auto"):
+        math = f"{res['attribute'].upper()} {res['attr_value']}{bonus_txt} vs DC {res['dc']} — no roll needed"
+    else:
+        math = f"{res['roll']}+{res['attr_value']}{bonus_txt}={res['total']} vs DC {res['dc']}"
     hurt = f" · −{res['damage']} HP" if res["damage"] else ""
     if res["kind"] == "monster":
         verb = "beaten" if res["passed"] else "you got past, wounded"
@@ -584,7 +599,8 @@ def resolve_choice(choice, story):
         apply_choice_target(choice, story)
         return
     cond = choice["condition"]
-    roll = animate_roll(st.empty(), cond.get("dice_type", R.DEFAULT_DICE))
+    sure = R.check_is_sure(cond, st.session_state.attributes, st.session_state.get("inventory", []))
+    roll = None if sure else animate_roll(st.empty(), cond.get("dice_type", R.DEFAULT_DICE))
     res = R.resolve_check(cond, st.session_state.attributes,
                           st.session_state.get("inventory", []), roll=roll)
     _record_outcome(res, story)
@@ -599,7 +615,8 @@ def resolve_choice(choice, story):
 
 def resolve_combat(monster, loc_id, story):
     """One roll decides the whole encounter; either way it's over and the path opens."""
-    roll = animate_roll(st.empty(), monster.get("dice_type", R.DEFAULT_DICE))
+    sure = R.monster_is_sure(monster, st.session_state.attributes)
+    roll = None if sure else animate_roll(st.empty(), monster.get("dice_type", R.DEFAULT_DICE))
     res = R.resolve_monster(monster, st.session_state.attributes, roll=roll)
     _record_outcome(res, story)
     st.session_state.locations[loc_id].pop("monster", None)
@@ -616,7 +633,10 @@ def render_outcome():
         head = f"⚔️ {o['name']} — {'beaten' if ok else 'you got past, wounded'}"
     else:
         head = f"{'✅' if ok else '❌'} {o['attribute'].upper()} check {'passed' if ok else 'failed'}"
-    head += f" · {o['total']} vs DC {o['dc']}" + ("" if ok else f" · −{o['damage']} HP")
+    if o.get("auto"):
+        head += f" · your {o['attribute'].upper()} {o['attr_value']} was enough — no roll needed"
+    else:
+        head += f" · {o['total']} vs DC {o['dc']}" + ("" if ok else f" · −{o['damage']} HP")
     st.markdown(
         f"<div style='background:#100d08;border:1px solid #2a2418;border-left:3px solid {accent};"
         f"border-radius:0 6px 6px 0;padding:0.8rem 1.2rem;margin:0.4rem 0 0.8rem 0'>"
@@ -864,6 +884,7 @@ def show_library():
     _left, mid, _right = st.columns([1, 1, 1])
     with mid:
         render_feedback("library")
+    render_visit_counter()
 
 
 def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model,
@@ -1153,7 +1174,32 @@ def show_create_page():
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
+def count_visit():
+    """Once per browser session: +1 visit, and remember the (hashed) visitor for the day."""
+    if st.session_state.get("fbmeta_visited"):         # fbmeta_* survives clear_session()
+        return
+    st.session_state["fbmeta_visited"] = True
+    if not st.session_state.get("fbmeta_player"):
+        st.session_state["fbmeta_player"] = uuid.uuid4().hex[:16]
+    visits.record_visit(client_ip() or "s:" + st.session_state["fbmeta_player"])
+
+
+def render_visit_counter():
+    """Small public counter in the library footer (QUEST_SHOW_VISITS=0 hides it)."""
+    if os.environ.get("QUEST_SHOW_VISITS", "1").strip() == "0":
+        return
+    t = visits.totals()
+    if not t["visits"]:
+        return
+    st.markdown(
+        f"<div style='text-align:center;color:#5a4c36;font-family:monospace;font-size:0.75rem;"
+        f"margin-top:0.8rem'>👁 {t['visits']:,} visits · {t['visitors']:,} adventurers "
+        f"· {t['visitors_today']:,} today</div>".replace(",", "\u202f"),
+        unsafe_allow_html=True)
+
+
 def main():
+    count_visit()
     # one-time per session: pull stories from cloud storage so every machine sees the
     # same library (QUEST_S3_BUCKET — see story_engine.py)
     if s3_enabled() and not st.session_state.get("s3_synced"):
@@ -1350,7 +1396,10 @@ def main():
 
         if st.button(f"⚔️  Fight {monster['name']}", use_container_width=True):
             st.session_state.last_outcome = None
-            st.session_state.pending_combat = True
+            if R.monster_is_sure(monster, st.session_state.attributes):
+                resolve_combat(monster, st.session_state.current_loc, story)   # no dice needed
+            else:
+                st.session_state.pending_combat = True
             st.rerun()
 
         flee = [c for c in curr_loc.get("choices", []) if c.get("is_flee")]
@@ -1413,7 +1462,8 @@ def main():
             lbl += (
                 f"\n  ↳ {cond['attribute'].upper()} check, "
                 f"DC {cond['check_value']} · {odds}"
-                + (f", fail −{cond['fail_damage']} HP" if cond.get("fail_damage") else "")
+                + (f", fail −{cond['fail_damage']} HP"
+                   if cond.get("fail_damage") and not odds.startswith("✓") else "")
                 + (f"  (+{bonus} {items_def.get(bonus_item, {}).get('name', bonus_item)})" if bonus else "")
             )
 

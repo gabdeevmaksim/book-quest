@@ -143,6 +143,12 @@ and notifies the owner on Telegram (`QUEST_TG_BOT_TOKEN` + `QUEST_TG_CHAT_ID`; h
 rating; game context is attached; per-session cooldown/cap kept in `fbmeta_*` session keys,
 which `clear_session()` preserves across navigation.
 
+**`visits.py`** — visit counter: `app.count_visit()` records one visit per browser session
+(flag in `fbmeta_visited`, survives navigation) and the visitor as a salted hash of the IP
+(salt in `state/visits.salt`; raw IPs never stored) in SQLite `state/visits.db` (`QUEST_VISITS_DB`).
+Days in `QUEST_STATS_TZ` (default Europe/Stockholm). Library footer shows totals
+(`QUEST_SHOW_VISITS=0` hides). CLI: `python3 visits.py [days]`.
+
 **`.streamlit/config.toml`** — dark theme in the app's colours (amber primary), so native
 widgets match the hand-styled CSS in `app.py`.
 
@@ -175,6 +181,9 @@ an existing story without generating.
   `condition.fail_damage` (default 2). A run only ends early at HP 0 (or in a bad ending).
   The matching `success_text`/`fail_text` is shown in an outcome card after the roll
   (`st.session_state.last_outcome`).
+- **No pointless rolls**: if even the lowest roll passes (`game_rules.check_is_sure` /
+  `monster_is_sure`: min roll + attribute + item bonus ≥ DC), the app resolves the check or fight
+  at once without the dice screen; odds show "✓ sure, no roll" and results carry `auto: True`.
 - **Monsters are one roll** (`dice_roll + attribute >= monster.strength`): won or lost, the
   encounter is over and the monster is removed from `st.session_state.locations`; then the
   location's non-flee choices appear. During the encounter only Fight and `is_flee`

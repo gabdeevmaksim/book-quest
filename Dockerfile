@@ -5,6 +5,10 @@ FROM python:3.12-slim
 # Set the working directory in the container
 WORKDIR /app
 
+# Print immediately (no stdout buffering): progress of scripts run via `docker compose exec`
+# and the app's logs show up live instead of in one lump at the end.
+ENV PYTHONUNBUFFERED=1
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -27,6 +31,7 @@ COPY feedback.py .
 COPY game_rules.py .
 COPY narrative_review.py .
 COPY quota.py .
+COPY visits.py .
 COPY scripts/ ./scripts/
 COPY .streamlit/ ./.streamlit/
 COPY stories/ ./stories/

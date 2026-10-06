@@ -140,7 +140,7 @@ honoured) but have no outcome texts or hinted dead ends. Rebuild them once, on t
 cd /path/to/book-quest
 # (wrap in sh -c "…": some docker compose versions swallow --flags meant for the script)
 docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py --dry-run"   # the plan
-docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py"            # do it
+docker compose exec quest-book sh -c "python3 -u scripts/regenerate_library.py"         # do it (-u: live output)
 docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py --only dust_and_rust.json"
 ```
 
@@ -172,6 +172,17 @@ Read saved feedback on the droplet:
 cd /path/to/book-quest
 docker compose exec quest-book python3 feedback.py            # latest 20
 docker compose exec quest-book sh -c "python3 feedback.py --kind bug -n 50"
+```
+
+## Visitor statistics
+
+The app counts visits (one per browser session) and unique visitors (salted IP hash — no raw
+IPs are stored) in `state/visits.db`. A small counter shows in the library footer
+(`QUEST_SHOW_VISITS=0` hides it). Daily table:
+
+```bash
+docker-compose exec quest-book python3 visits.py              # last 14 days
+docker-compose exec quest-book sh -c "python3 visits.py 60"   # last 60 days
 ```
 
 ## Security notes

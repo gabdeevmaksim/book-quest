@@ -57,3 +57,17 @@ def test_trap_band():
     assert R.trap_band("normal", 14) == (1, 1) and R.trap_band("normal", 15) == (1, 2)
     assert R.trap_band("hard", 12) == (2, 2) and R.trap_band("hard", 17) == (2, 3)
     assert R.trap_band("hard", 30) == (2, 4)
+
+
+def test_no_roll_when_the_attribute_already_passes():
+    import game_rules as R
+    cond = {"attribute": "strength", "check_value": 9, "fail_damage": 4}
+    assert R.check_is_sure(cond, {"strength": 8})              # 8 + lowest roll (1) ≥ 9
+    assert not R.check_is_sure(cond, {"strength": 7})
+    res = R.resolve_check(cond, {"strength": 8})
+    assert res["auto"] and res["passed"] and res["damage"] == 0
+    bonus = {**cond, "check_value": 12, "item_bonus": {"item": "rope", "bonus": 3}}
+    assert R.check_is_sure(bonus, {"strength": 8}, ["rope"]) and not R.check_is_sure(bonus, {"strength": 8})
+    m = {"name": "Rat", "strength": 6, "attribute": "agility"}
+    assert R.monster_is_sure(m, {"agility": 5}) and R.resolve_monster(m, {"agility": 5})["auto"]
+    assert not R.resolve_monster({**m, "strength": 9}, {"agility": 5})["auto"]
