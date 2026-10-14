@@ -1,0 +1,13 @@
+# Caddy — HTTPS front door for Quest Book (see DEPLOY.md → "Domain + HTTPS").
+# QUEST_DOMAIN comes from .env, e.g. play.example.com. Caddy fetches and renews the
+# Let's Encrypt certificate by itself (needs ports 80 + 443 open and the DNS record pointing
+# here, Cloudflare proxy OFF / "DNS only").
+{$QUEST_DOMAIN} {
+	encode gzip
+	reverse_proxy quest-book:8501
+}
+
+# Old links to the bare IP (http://134.122.120.45/?story=…) and any other host name → the domain.
+http:// {
+	redir https://{$QUEST_DOMAIN}{uri} permanent
+}

@@ -96,7 +96,7 @@
       what you decide and the roll of the dice — with stats, monsters, and loot along the way.
       And you can conjure a brand-new adventure on any theme, in your language, at your level.</p>
     <div class="cta">
-      <a class="btn btn-primary" href="http://134.122.120.45" target="_blank" rel="noopener">▶  Play now — it's free</a>
+      <a class="btn btn-primary js-play" href="http://134.122.120.45" target="_blank" rel="noopener">▶  Play now — it's free</a>
       <a class="btn btn-kofi" href="https://ko-fi.com/dedulek" target="_blank" rel="noopener">☕  Support on Ko-fi</a>
       <a class="btn btn-gh" href="https://github.com/sponsors/gabdeevmaksim" target="_blank" rel="noopener">♥  Sponsor on GitHub</a>
     </div>
@@ -160,5 +160,15 @@
   source-available, noncommercial.
 </footer>
 
+<script>
+  // On the custom domain (example.com / www.example.com) the game lives at play.example.com;
+  // on *.github.io (before the domain is set up) keep the direct server link.
+  (function () {
+    var h = location.hostname.replace(/^www\./, "");
+    if (h && !/github\.io$|^localhost$|^127\./.test(h)) {
+      document.querySelectorAll("a.js-play").forEach(function (a) { a.href = "https://play." + h; });
+    }
+  })();
+</script>
 </body>
 </html>

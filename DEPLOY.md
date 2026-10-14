@@ -174,6 +174,41 @@ docker compose exec quest-book python3 feedback.py            # latest 20
 docker compose exec quest-book sh -c "python3 feedback.py --kind bug -n 50"
 ```
 
+## Domain + HTTPS
+
+Layout: `example.com` (+ `www`) → the landing page on GitHub Pages; `play.example.com` → the
+game on the droplet, behind **Caddy** (`Caddyfile`, a second container in `docker-compose.yml`),
+which gets and renews the HTTPS certificate itself. The app container no longer publishes any
+port; old `http://134.122.120.45/…` links redirect to the domain.
+
+1. **Cloudflare → DNS → Records** (set every record to **DNS only**, grey cloud — Caddy and
+   GitHub issue the certificates, and the app sees real visitor IPs):
+
+   | Type | Name | Content |
+   |---|---|---|
+   | A | `@` | `185.199.108.153` |
+   | A | `@` | `185.199.109.153` |
+   | A | `@` | `185.199.110.153` |
+   | A | `@` | `185.199.111.153` |
+   | CNAME | `www` | `gabdeevmaksim.github.io` |
+   | A | `play` | `134.122.120.45` |
+
+2. **GitHub → repo Settings → Pages**: source = branch `master`, folder `/docs`; Custom domain
+   = `example.com` → Save (GitHub commits `docs/CNAME`; run `git pull` afterwards). When the
+   DNS check is green, tick **Enforce HTTPS**. The landing page's Play button switches to
+   `https://play.<domain>` automatically.
+3. **Droplet firewall**: `ufw allow 80/tcp && ufw allow 443/tcp && ufw allow 443/udp`
+   (port 8501 no longer needs to be open: `ufw delete allow 8501` if it was).
+4. **`DOTENV` secret**: add `QUEST_DOMAIN=play.example.com` (the deploy refuses to start
+   without it, leaving the old version running). Share links use `https://play.example.com`
+   automatically; `QUEST_PUBLIC_URL` is only needed to override that.
+5. Push → the deploy starts Caddy; the first visit to `https://play.example.com` may take a few
+   seconds while the certificate is issued. Check with
+   `docker-compose logs --tail 40 caddy`.
+
+Local Docker runs: put `QUEST_DOMAIN=localhost` in your local `.env` and open
+`https://localhost` (Caddy's self-signed local certificate — accept the browser warning).
+
 ## Visitor statistics
 
 The app counts visits (one per browser session) and unique visitors (salted IP hash — no raw

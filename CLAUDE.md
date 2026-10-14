@@ -20,8 +20,12 @@ streamlit run app.py
 
 **Docker:**
 ```bash
-docker-compose up --build
+docker-compose up --build      # app + Caddy (HTTPS proxy); needs QUEST_DOMAIN in .env
 ```
+In production `play.<domain>` → Caddy (`Caddyfile`, ports 80/443, auto Let's Encrypt) →
+`quest-book:8501` (no public port). The app reads the client IP from the LAST
+`X-Forwarded-For` entry (the one Caddy adds) — keep Cloudflare's proxy off (DNS only).
+`PUBLIC_URL` defaults to `https://$QUEST_DOMAIN`. Local: `QUEST_DOMAIN=localhost`.
 
 **Production (CI/CD):** pushing to `master` runs `.github/workflows/deploy.yml` — tests
 (`python -m pytest tests`), then an SSH deploy to the DigitalOcean droplet via

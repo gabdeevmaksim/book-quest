@@ -172,6 +172,6 @@ phases land.
 
 - Add `QUEST_TG_BOT_TOKEN` + `QUEST_TG_CHAT_ID` to `.env` / the `DOTENV` secret (bot is created)
   so feedback reaches Telegram — without them it's still saved on the droplet.
-- Buy a domain → point it at GitHub Pages (landing) and a `play.` subdomain at the droplet;
-  then set `QUEST_PUBLIC_URL` and repoint the landing page's Play button.
-- Enable GitHub Pages: Settings → Pages → branch `master`, folder `/docs`.
+- **Domain bought (Cloudflare)** ✅ — HTTPS via Caddy is built in. To switch on: DNS records,
+  GitHub Pages custom domain, firewall 443, `QUEST_DOMAIN=play.<domain>` in `DOTENV` (see
+  `DEPLOY.md` → Domain + HTTPS).

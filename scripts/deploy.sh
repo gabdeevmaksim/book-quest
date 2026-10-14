@@ -39,6 +39,13 @@ if [ -f .env.incoming ]; then
 fi
 [ -f .env ] || { echo "!! no .env on the server and no DOTENV secret set" >&2; exit 1; }
 chmod 600 .env
+# Caddy (the HTTPS front door) needs the domain; without it the site would go dark — stop here
+# while the old containers are still serving.
+if ! grep -Eq '^QUEST_DOMAIN=.+' .env; then
+    echo "!! QUEST_DOMAIN is not set in .env / the DOTENV secret (e.g. QUEST_DOMAIN=play.example.com)." >&2
+    echo "   Nothing was restarted — the previous version is still running." >&2
+    exit 1
+fi
 
 # Prefer Compose v2 (`docker compose`); fall back to the legacy v1 binary if that's all there is.
 if docker compose version >/dev/null 2>&1; then
@@ -61,6 +68,10 @@ echo "==> Waiting for the app to become healthy"
 for _ in $(seq 1 45); do
     if "${DC[@]}" exec -T quest-book curl -fsS http://localhost:8501/_stcore/health >/dev/null 2>&1; then
         echo "==> Healthy — deploy complete."
+        if ! "${DC[@]}" ps caddy 2>/dev/null | grep -qi "up"; then
+            echo "!! warning: the caddy (HTTPS) container is not running — check:" \
+                 "${DC[*]} logs --tail 40 caddy" >&2
+        fi
         exit 0
     fi
     sleep 2

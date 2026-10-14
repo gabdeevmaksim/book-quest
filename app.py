@@ -166,11 +166,18 @@ import uuid
 
 
 def client_ip():
-    """The visitor's IP address if Streamlit exposes it (never stored as-is), else None."""
+    """The visitor's IP address (never stored as-is), else None.
+
+    In production the app sits behind Caddy (docker-compose), so the connection Streamlit sees
+    comes from the proxy; Caddy puts the real client address in X-Forwarded-For. We take the
+    LAST entry — the one Caddy itself added — so a visitor can't fake it by sending their own
+    header. Without a proxy (local runs) the direct connection address is used."""
     ctx = getattr(st, "context", None)
+    ip = None
     try:
-        ip = getattr(ctx, "ip_address", None) or \
-            ((ctx.headers.get("X-Forwarded-For") or "").split(",")[0].strip() if ctx else None)
+        xff = (ctx.headers.get("X-Forwarded-For") or "") if ctx else ""
+        parts = [p.strip() for p in str(xff).split(",") if p.strip()]
+        ip = parts[-1] if parts else getattr(ctx, "ip_address", None)
     except Exception:
         ip = None
     return ip if isinstance(ip, str) and ip else None
@@ -191,7 +198,10 @@ import game_rules as R   # challenge mechanics, shared with playtest.py (see gam
 # ── sharing & deep links ──────────────────────────────────────────────────────
 # Public base URL used in share links. Set QUEST_PUBLIC_URL (e.g. https://play.yourdomain)
 # once you have a domain; until then it falls back to the droplet's address.
-PUBLIC_URL = (os.environ.get("QUEST_PUBLIC_URL") or "http://134.122.120.45").rstrip("/")
+PUBLIC_URL = (os.environ.get("QUEST_PUBLIC_URL")
+              or (f"https://{os.environ['QUEST_DOMAIN'].strip()}"
+                  if os.environ.get("QUEST_DOMAIN", "").strip() else "")
+              or "http://134.122.120.45").rstrip("/")
 
 SHARE_TARGETS = [
     ("Telegram", "https://t.me/share/url?url={u}&text={t}"),
