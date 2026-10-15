@@ -34,6 +34,7 @@ COPY quota.py .
 COPY visits.py .
 COPY scripts/ ./scripts/
 COPY .streamlit/ ./.streamlit/
+COPY assets/ ./assets/
 COPY stories/ ./stories/
 COPY cyoa-skills/ ./cyoa-skills/
 

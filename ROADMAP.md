@@ -172,6 +172,5 @@ phases land.
 
 - Add `QUEST_TG_BOT_TOKEN` + `QUEST_TG_CHAT_ID` to `.env` / the `DOTENV` secret (bot is created)
   so feedback reaches Telegram — without them it's still saved on the droplet.
-- **Domain bought (Cloudflare)** ✅ — HTTPS via Caddy is built in. To switch on: DNS records,
-  GitHub Pages custom domain, firewall 443, `QUEST_DOMAIN=play.<domain>` in `DOTENV` (see
-  `DEPLOY.md` → Domain + HTTPS).
+- **Domain live** ✅ — `quest-book.com` (landing, GitHub Pages) and `https://play.quest-book.com`
+  (game, Caddy + Let's Encrypt). Old IP links redirect.

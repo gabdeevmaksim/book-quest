@@ -10,8 +10,10 @@ import subprocess
 from functools import lru_cache
 
 st.set_page_config(
-    page_title="CYOA RPG Adventure",
-    page_icon="🎲",
+    page_title="Quest Book",
+    page_icon=(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.png")
+               if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.png"))
+               else "📖"),
     layout="centered",
     initial_sidebar_state="expanded",
 )
@@ -201,7 +203,7 @@ import game_rules as R   # challenge mechanics, shared with playtest.py (see gam
 PUBLIC_URL = (os.environ.get("QUEST_PUBLIC_URL")
               or (f"https://{os.environ['QUEST_DOMAIN'].strip()}"
                   if os.environ.get("QUEST_DOMAIN", "").strip() else "")
-              or "http://134.122.120.45").rstrip("/")
+              or "https://play.quest-book.com").rstrip("/")
 
 SHARE_TARGETS = [
     ("Telegram", "https://t.me/share/url?url={u}&text={t}"),
