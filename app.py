@@ -155,7 +155,7 @@ from story_engine import (  # Streamlit-free core (shared with story_agent.py)
     gen_models, create_story,
     s3_enabled, push_story_to_s3, sync_stories_from_s3,
     monthly_budget, month_spend, budget_exceeded, record_spend, budget_fallback_models,
-    budget_left, review_models, free_tier, money,
+    budget_left, review_models, free_tier, money, revise_story,
 )
 import contextlib
 import urllib.parse
@@ -363,12 +363,20 @@ def render_feedback(where, label="Send feedback"):
         st.caption("Your current story, location and HP are attached automatically.")
 
 
+REWORK_MAX_STARS = 3          # ratings at or below this offer to rework the story
+
+
 def render_rate_story(story):
-    """End-screen 'How did you like this story?' — once per story per session."""
+    """End-screen 'How did you like this story?' — once per story per session. A rating of
+    3 stars or less offers to rework the story with the player's notes."""
     slug = story_slug(st.session_state.get("active_story_path")) or story.get("title", "story")
     flag = f"{FB_KEEP_PREFIX}rated_{slug}"
+    offer_key = f"{FB_KEEP_PREFIX}rework_{slug}"
     if st.session_state.get(flag):
-        st.caption("★ Thanks for rating this story!")
+        if st.session_state.get(offer_key):
+            render_rework_offer(story, offer_key)
+        else:
+            st.caption("★ Thanks for rating this story!")
         return
     with st.form("fb_form_end", clear_on_submit=True):
         st.markdown("**How did you like this story?**")
@@ -384,9 +392,85 @@ def render_rate_story(story):
             ok, note = send_feedback("story", comment, len(stars))
             if ok:
                 st.session_state[flag] = True
-                st.success("★ Thanks for rating this story!")
+                if len(stars) <= REWORK_MAX_STARS and rework_enabled():
+                    st.session_state[offer_key] = {"stars": len(stars), "notes": comment or "",
+                                                   "state": "offer"}
+                st.rerun()
             else:
                 st.warning(note)
+
+
+def rework_enabled():
+    return os.environ.get("QUEST_PLAYER_REWORK", "1").strip() != "0"
+
+
+def _rework_blocked():
+    """Why a rework can't run right now (None = it can)."""
+    provider = gen_provider()
+    if not env_api_key(provider):
+        return "Story generation isn't configured on this server."
+    if budget_exceeded() and not budget_fallback_models():
+        return "This month's story budget is used up — reworking is paused until next month."
+    used, per_player = Q.client_used(player_id()), Q.stories_per_player()
+    if used >= per_player:
+        return (f"You've used today's {per_player} story creations/reworks — come back in "
+                f"{Q.format_reset()}.")
+    return None
+
+
+def render_rework_offer(story, offer_key):
+    """'Not great? Let's rework it' — the player's notes become instructions for the AI, which
+    rewrites the story and runs every quality gate again."""
+    offer = st.session_state[offer_key]
+    path = st.session_state.get("active_story_path")
+    res = offer.get("result")
+    if res is not None:
+        if res.get("ok"):
+            st.success("✨ The story was reworked with your notes and passed every check.")
+            if st.button("▶  Play the new version", use_container_width=True, key="rework_play"):
+                st.session_state.pop(offer_key, None)                       # rate the new version
+                st.session_state.pop(offer_key.replace("rework_", "rated_", 1), None)
+                select_story(path)
+                st.rerun()
+        elif res.get("busy"):
+            st.warning("Another story is being made right now — try again in a minute.")
+            offer.pop("result", None)
+        else:
+            st.warning("Couldn't rework it this time: " + "; ".join(
+                res.get("errors") or (["the monthly budget is used up"] if res.get("capped_blocked")
+                                      else ["today's quota ran out"] if res.get("quota_out") else
+                                      ["unknown problem"])))
+        return
+    st.markdown(
+        "<div style='background:#141008;border-left:3px solid #8b6914;border-radius:0;"
+        "padding:0.9rem 1.2rem;margin:0.4rem 0;color:#c8b49a;font-size:0.92rem;line-height:1.6'>"
+        "Sorry it wasn't great. <b>Want us to rework this story?</b> Tell us what wasn't good and "
+        "what should be improved — the storyteller rewrites the story with your notes and checks "
+        "it again before it goes back into the library.</div>", unsafe_allow_html=True)
+    notes = st.text_area("What wasn't good? What should be improved?", value=offer.get("notes", ""),
+                         max_chars=1500, key=f"rework_notes_{offer_key}",
+                         placeholder="e.g. the scenes jump around; the ending doesn't say what "
+                                     "happened to the files…")
+    why = _rework_blocked()
+    if why:
+        st.caption(why)
+    c1, c2 = st.columns(2)
+    go = c1.button("✨  Rework this story", use_container_width=True, key="rework_go",
+                   disabled=bool(why) or not notes.strip() or not path)
+    if c2.button("No thanks", use_container_width=True, key="rework_no"):
+        st.session_state.pop(offer_key, None)
+        st.rerun()
+    if go:
+        provider = gen_provider()
+        with st.spinner("Reworking the story with your notes, then running every check again… "
+                        "this can take a few minutes."):
+            res = _do_generate(story.get("theme", ""), story.get("difficulty", "normal"), 14, "",
+                               env_api_key(provider), provider, gen_default_model(provider),
+                               revise=(path, notes.strip(), offer.get("stars")))
+        offer["result"] = res
+        feedback.submit("story", f"[rework {'done' if res.get('ok') else 'failed'}] {notes.strip()}",
+                        offer.get("stars"), context=feedback_context())
+        st.rerun()
 
 
 # ── dice & text helpers ───────────────────────────────────────────────────────
@@ -632,6 +716,18 @@ def resolve_combat(monster, loc_id, story):
     res = R.resolve_monster(monster, st.session_state.attributes, roll=roll)
     _record_outcome(res, story)
     st.session_state.locations[loc_id].pop("monster", None)
+
+
+def location_name(loc_id, loc, story=None):
+    """Scene heading: the story's own location name; older stories without one get a
+    readable version of the id (English) or a neutral word."""
+    name = str((loc or {}).get("name") or "").strip()
+    if name:
+        return name
+    lang = ((story or {}).get("language") or "English").strip().lower()
+    if lang in ("english", "en"):
+        return str(loc_id or "").replace("_", " ").strip().capitalize()
+    return ""
 
 
 def render_outcome():
@@ -900,7 +996,8 @@ def show_library():
 
 
 def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model,
-                 language="English", language_level="C2"):
+                 language="English", language_level="C2", revise=None):
+    """Create a story — or, with revise=(path, notes, stars), rework an existing one."""
     # Monthly budget policy: while under the cap, use the owner's chosen model first, with the
     # provider chain as automatic fallback. Once this month's spend reaches the cap, generation
     # moves to the FREE Google project (QUEST_GOOGLE_FREE_API_KEY — billing is per project, so
@@ -920,11 +1017,11 @@ def _do_generate(theme, difficulty, length, title_hint, api_key, provider, model
         if capped:
             api_key = env_api_key("google")      # the free project's key (inside free_tier)
         return _run_generation(theme, difficulty, length, title_hint, api_key, provider, models,
-                               capped, language, language_level)
+                               capped, language, language_level, revise)
 
 
 def _run_generation(theme, difficulty, length, title_hint, api_key, provider, models, capped,
-                    language, language_level):
+                    language, language_level, revise=None):
     # Free tier: one generation at a time (Flash models allow only 5 requests/minute), so
     # simultaneous players queue for up to ~2.5 min instead of tripping the per-minute limit.
     # Paid tier (1000/min): players generate in parallel.
@@ -935,10 +1032,15 @@ def _run_generation(theme, difficulty, length, title_hint, api_key, provider, mo
             return {"ok": False, "busy": True}
         Q.record_client(player_id())             # counts toward the per-player daily cap
         try:
-            ok, path, summary = create_story(theme, difficulty, length, title_hint, api_key,
-                                             provider=provider, models=models, max_attempts=5,
-                                             keep_best=True, language=language,
-                                             language_level=language_level)
+            if revise:
+                rpath, notes, stars = revise
+                ok, path, summary = revise_story(rpath, notes, stars, api_key, provider=provider,
+                                                 models=models, max_attempts=4)
+            else:
+                ok, path, summary = create_story(theme, difficulty, length, title_hint, api_key,
+                                                 provider=provider, models=models, max_attempts=5,
+                                                 keep_best=True, language=language,
+                                                 language_level=language_level)
         except ImportError:
             pkg = PROVIDER_PKG.get(provider, provider)
             return {"ok": False, "errors": [f"The '{pkg}' Python package isn't installed. "
@@ -985,6 +1087,9 @@ def _run_generation(theme, difficulty, length, title_hint, api_key, provider, mo
         if s3_enabled():
             out["s3_ok"], out["s3_msg"] = push_story_to_s3(path)
         return out
+    if revise:
+        return {"ok": False, "errors": ["The reworked version didn't pass every quality check, so "
+                                        "the story was left as it was."]}
     return {"ok": False, "errors": ["The model could not produce any usable story (try again, or check your API key)."]}
 
 
@@ -1311,17 +1416,30 @@ def main():
     # ── outcome of the last roll (what happened on the way here) ─────────────
     render_outcome()
 
-    # ── location description ──────────────────────────────────────────────────
-    st.markdown(
+    pending        = st.session_state.get("pending_choice")
+    pending_combat = st.session_state.get("pending_combat", False)
+    scene_name = location_name(st.session_state.current_loc, curr_loc, story)
+    scene_html = (
         f"<div style='background:linear-gradient(135deg,#141008 0%,#0f0c06 100%);"
         f"border-left:3px solid #8b6914;border-radius:0 6px 6px 0;"
         f"padding:1.4rem 1.8rem;margin:0.5rem 0 1rem 0;"
         f"font-family:\"Special Elite\",Georgia,serif;"
         f"font-size:1.05rem;line-height:1.9;color:#d4c5a9;"
         f"box-shadow:inset 0 0 30px rgba(0,0,0,0.4)'>"
-        f"{curr_loc['description']}</div>",
-        unsafe_allow_html=True,
-    )
+        f"{curr_loc['description']}</div>")
+
+    # ── location: name + description (folded away while the dice are out, so the roll
+    #    comes first and nobody has to scroll past text they've just read) ─────────────
+    if pending or pending_combat:
+        with st.expander(f"📍  {scene_name or 'Location'}", expanded=False):
+            st.markdown(scene_html, unsafe_allow_html=True)
+    else:
+        if scene_name:
+            st.markdown(
+            f"<div style='color:#d4a843;font-family:\"Share Tech Mono\",monospace;"
+            f"font-size:0.95rem;letter-spacing:0.5px;margin:0.6rem 0 -0.2rem 0'>📍 {scene_name}</div>",
+            unsafe_allow_html=True)
+        st.markdown(scene_html, unsafe_allow_html=True)
 
     # ── event log ─────────────────────────────────────────────────────────────
     if st.session_state.log:
@@ -1335,9 +1453,6 @@ def main():
                 )
 
     # ── pending dice roll ─────────────────────────────────────────────────────
-    pending        = st.session_state.get("pending_choice")
-    pending_combat = st.session_state.get("pending_combat", False)
-
     if pending or pending_combat:
         if pending:
             cond  = pending.get("condition", {})
@@ -1349,10 +1464,11 @@ def main():
             attr_val = st.session_state.attributes.get(attr, 0)
             odds  = odds_label(dice, dc, attr_val, bonus)
             extra = f" +{bonus} {item_name(story, bonus_item)}" if bonus else ""
+            action = pending.get("text", "")
             label = (
-                f"**{attr.upper()} check** — beat DC **{dc}** "
-                f"(you roll {dice}{extra}+{attr_val}) · **{odds}** · "
-                f"*fail: you still get through, but lose {fail} HP*"
+                f"<b>{attr.upper()} check</b> — beat DC <b>{dc}</b> "
+                f"(you roll {dice}{extra}+{attr_val}) · <b>{odds}</b> · "
+                f"<i>fail: you still get through, but lose {fail} HP</i>"
             )
         else:
             monster = curr_loc["monster"]
@@ -1362,15 +1478,18 @@ def main():
             dice    = monster.get("dice_type", "1d6")
             attr_val = st.session_state.attributes.get(attr, 0)
             odds    = odds_label(dice, dc, attr_val)
+            action  = f"⚔️ Fight {monster['name']}"
             label   = (
-                f"**{attr.upper()} vs {monster['name']}** — beat DC **{dc}** "
-                f"· **{odds}** · *lose: you still get past, but lose {fail} HP*"
+                f"<b>{attr.upper()} vs {monster['name']}</b> — beat DC <b>{dc}</b> "
+                f"· <b>{odds}</b> · <i>lose: you still get past, but lose {fail} HP</i>"
             )
 
         st.markdown(
             f"<div style='background:#0c0a07;border:1px solid #3a2e14;"
             f"border-radius:6px;padding:1.2rem 1rem;margin:0.8rem 0;text-align:center'>"
-            f"<div style='color:#7a6a4a;font-size:0.85rem;font-family:monospace;"
+            + (f"<div style='color:#d4c5a9;font-family:\"Special Elite\",Georgia,serif;"
+               f"font-size:1.05rem;margin-bottom:0.7rem'>{action}</div>" if action else "")
+            + f"<div style='color:#7a6a4a;font-size:0.85rem;font-family:monospace;"
             f"margin-bottom:0.5rem'>{label}</div>"
             f"<div style='font-size:4rem'>🎲</div></div>",
             unsafe_allow_html=True,

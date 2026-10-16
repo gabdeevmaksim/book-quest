@@ -97,6 +97,7 @@ place as already known before the player can have met it on that path; keep fact
   "start_location_id": "start",
   "locations": {
     "start": {
+      "name": "The Old Well",              // short place name (2–5 words, story language)
       "description": "Rich 2–4 sentence scene-setting prose. Rotten planks cover the old well.",
       "is_end": false,
       "loot": ["lantern"],               // OPTIONAL: items granted on first visit
@@ -155,6 +156,9 @@ place as already known before the player can have met it on that path; keep fact
   `condition`, outcome texts and `target_id`. After the encounter — won or lost — the
   location's non-flee choices appear, so **every monster location needs at least one
   non-flee onward choice**.
+- Every location has a **`name`**: a short, evocative place or situation title (2–5 words, in
+  the story language, e.g. "The Flooded Crypt", "Пекарня на углу"). The game shows it as the
+  scene's heading, so it must match the description and differ from the other locations' names.
 - Endings are locations with `"is_end": true`. Add `"is_victory": false` for a grim/dead
   ending; default is a victory. Endings have an empty `choices: []`.
 - `trap_hint` on a choice marks the entrance to a dead-end branch (see "Dead ends").

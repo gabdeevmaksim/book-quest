@@ -175,7 +175,7 @@ def test_create_story_attaches_usage(monkeypatch, tmp_path):
     monkeypatch.setattr(E, "gate_report", lambda p, d: (
         True, [], {"correctness": True, "coherence": True, "balance": "PASS", "bal_lines": []}))
     story = ('{"title":"T","character_template":{"health":18,"strength":10,"agility":10,'
-             '"stamina":10},"start_location_id":"s","locations":{"s":{"description":"d",'
+             '"stamina":10},"start_location_id":"s","locations":{"s":{"name":"Start","description":"d",'
              '"is_end":true,"is_victory":true,"choices":[]}}}')
     out = tmp_path / "t.json"
     ok, path, summary = E.create_story("theme", "normal", api_key="x", out_path=str(out),
@@ -183,3 +183,20 @@ def test_create_story_attaches_usage(monkeypatch, tmp_path):
     assert ok and path == str(out) and out.exists()
     for key in ("cost_usd", "tokens_in", "tokens_out", "attempts", "model_used"):
         assert key in summary
+
+
+def test_new_stories_must_name_every_location(monkeypatch, tmp_path):
+    monkeypatch.setattr(E, "gate_report", lambda p, d: (
+        True, [], {"correctness": True, "coherence": True, "balance": "PASS", "bal_lines": []}))
+    unnamed = ('{"title":"T","character_template":{"health":18,"strength":10,"agility":10,'
+               '"stamina":10},"start_location_id":"s","locations":{"s":{"description":"d",'
+               '"is_end":true,"is_victory":true,"choices":[]}}}')
+    seen = []
+
+    def model(system, messages):
+        seen.append(messages[-1]["content"])
+        return unnamed if len(seen) == 1 else unnamed.replace('{"description"', '{"name":"Gate","description"')
+    ok, path, _ = E.create_story("theme", "normal", api_key="x", out_path=str(tmp_path / "t.json"),
+                                 model_call=model, review=False, max_attempts=2)
+    assert ok and len(seen) == 2 and "NAMES" in seen[1]
+    assert E.unnamed_locations({"locations": {"a": {"name": " "}, "b": {"name": "B"}}}) == ["a"]

@@ -67,6 +67,72 @@ def audit(path, difficulty, with_review=False):
     return ok
 
 
+def feedback_notes(path, max_stars=3):
+    """Players' comments for this story with a rating of `max_stars` or less (newest first)."""
+    import feedback
+    slug = E.os.path.splitext(E.os.path.basename(path))[0]
+    title = (E.load_story_file(path).get("title") or "").strip()
+    out = []
+    for e in reversed(feedback.read_entries()):
+        c = e.get("context") or {}
+        if e.get("kind") != "story" or not (e.get("rating") and e["rating"] <= max_stars):
+            continue
+        if c.get("slug") == slug or (title and c.get("story") == title):
+            msg = (e.get("message") or "").strip()
+            if msg and not msg.startswith("[rework"):
+                out.append((e["rating"], msg))
+    return out
+
+
+def _find_story(arg):
+    """A story path, or (part of) a title — e.g. --revise "Дони Ривера"."""
+    if E.os.path.exists(arg):
+        return arg
+    hits = [s["path"] for s in E.list_stories()
+            if not s.get("error") and arg.lower() in (s.get("title") or "").lower()]
+    if len(hits) == 1:
+        return hits[0]
+    print(("Several stories match: " + ", ".join(hits)) if hits else f"No story matches {arg!r}.")
+    return None
+
+
+def revise(args):
+    args.revise = _find_story(args.revise)
+    if not args.revise:
+        return False
+    provider = (args.provider or E.gen_provider()).lower()
+    models = [m.strip() for m in args.models.split(",") if m.strip()] if args.models else E.gen_models(provider)
+    notes, stars = args.notes.strip(), args.stars
+    if not notes:
+        found = feedback_notes(args.revise)
+        if found:
+            stars = stars or found[0][0]
+            notes = "\n".join(f"- ({r}★) {m}" for r, m in found[:5])
+            print("Using players' feedback for this story:\n" + notes)
+    if not notes:
+        print("No --notes given and no low-star feedback found for this story.")
+        return False
+    if E.budget_exceeded():
+        print(f"This month's budget is used up ({E.money(E.month_spend())}).")
+        return False
+    with E.Q.generation_slot(timeout=1800) as got:
+        if not got:
+            print("Another generation has held the slot for 30 min — try later.")
+            return False
+        ok, path, summary = E.revise_story(args.revise, notes, stars, E.env_api_key(provider),
+                                           provider=provider, models=models,
+                                           max_attempts=args.max_attempts, log=print)
+    if summary and summary.get("cost_usd") is not None:
+        E.record_spend(summary["cost_usd"], summary.get("model_used", ""),
+                       summary.get("tokens_in", 0), summary.get("tokens_out", 0))
+        print(f"  cost ≈ {E.money(summary['cost_usd'], 4)}")
+    if ok and E.s3_enabled():
+        s3_ok, detail = E.push_story_to_s3(path)
+        print(("✓ s3: " if s3_ok else "✗ s3: ") + detail)
+    print("✓ REVISED — " + path if ok else "✗ the revision didn't pass every gate — old version kept")
+    return ok
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Generate (or audit) a fully game-ready Quest Book story using a free Gemini key.")
@@ -93,6 +159,11 @@ def main():
                     help="don't generate — just run the gates on an existing story and report")
     ap.add_argument("--review", action="store_true",
                     help="with --audit: also run the story-review agent (one cheap model call)")
+    ap.add_argument("--revise", default=None, metavar="STORY.json",
+                    help="rework an existing story (in place; old version → stories/_archive/) "
+                         "using --notes and/or the players' low-star feedback for it")
+    ap.add_argument("--notes", default="", help="with --revise: what to fix (any language)")
+    ap.add_argument("--stars", type=int, default=None, help="with --revise: the rating (1-5)")
     ap.add_argument("--s3-sync", action="store_true",
                     help="don't generate — two-way sync with the S3 bucket (QUEST_S3_BUCKET): "
                          "pull missing/newer stories down, upload local stories the bucket lacks")
@@ -108,6 +179,9 @@ def main():
         for e in derr + uerr:
             print("  ! " + e)
         sys.exit(0 if not (derr + uerr) else 2)
+
+    if args.revise:
+        sys.exit(0 if revise(args) else 2)
 
     if args.audit:
         sys.exit(0 if audit(args.audit, args.difficulty, with_review=args.review) else 2)

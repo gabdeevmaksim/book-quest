@@ -209,6 +209,19 @@ port; old `http://134.122.120.45/…` links redirect to the domain.
 Local Docker runs: put `QUEST_DOMAIN=localhost` in your local `.env` and open
 `https://localhost` (Caddy's self-signed local certificate — accept the browser warning).
 
+## Reworking a story players disliked
+
+Players who rate a story 3★ or less are offered "Rework this story": their notes go to the AI,
+which rewrites it and re-runs every check (old version kept in `stories/_archive/`). You can do the
+same by hand — it picks up the players' low-star comments automatically:
+
+```bash
+docker-compose exec quest-book sh -c 'python3 -u story_agent.py --revise "Дони Ривера"'
+docker-compose exec quest-book sh -c 'python3 -u story_agent.py --revise stories/x.json --notes "…"'
+```
+
+`QUEST_PLAYER_REWORK=0` hides the button for players (the CLI still works).
+
 ## Visitor statistics
 
 The app counts visits (one per browser session) and unique visitors (salted IP hash — no raw

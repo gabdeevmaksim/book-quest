@@ -91,6 +91,7 @@ character_template { health, strength, agility, stamina },
 items { id: { name, icon, description, use?:{heal:N} } },
 start_location_id,
 locations { id: {
+  name,                      # short scene title shown as the heading (required for new stories)
   description, is_end, is_victory?, loot?:[item],
   monster?: { name, strength(=DC), fail_damage, dice_type?, attribute?,
               success_text, fail_text },
@@ -147,6 +148,16 @@ and notifies the owner on Telegram (`QUEST_TG_BOT_TOKEN` + `QUEST_TG_CHAT_ID`; h
 rating; game context is attached; per-session cooldown/cap kept in `fbmeta_*` session keys,
 which `clear_session()` preserves across navigation.
 
+**Story rework from player feedback** — `story_engine.revise_story(path, notes, stars)`: the model
+gets the generator spec, its current story, the player's notes (wrapped in `revision_prompt`, which
+treats them as quality feedback, never as a change of premise) and a fresh continuity review, then
+the normal gated repair loop (`_create_story(revise_from=…, revision_notes=…)`). Success → saved in
+place (same filename/title/theme/language, `revisions` += 1, old copy in `stories/_archive/`);
+failure → untouched. In the app a rating ≤ 3★ (`REWORK_MAX_STARS`) offers "Rework this story"
+(counts toward the per-player daily cap, follows the budget/free-tier route; `QUEST_PLAYER_REWORK=0`
+turns it off). CLI: `story_agent.py --revise <file or title> [--notes …] [--stars N]` — without
+`--notes` it uses the players' ≤3★ comments for that story from `state/feedback.jsonl`.
+
 **`visits.py`** — visit counter: `app.count_visit()` records one visit per browser session
 (flag in `fbmeta_visited`, survives navigation) and the visitor as a salted hash of the IP
 (salt in `state/visits.salt`; raw IPs never stored) in SQLite `state/visits.db` (`QUEST_VISITS_DB`).
@@ -188,6 +199,9 @@ an existing story without generating.
 - **No pointless rolls**: if even the lowest roll passes (`game_rules.check_is_sure` /
   `monster_is_sure`: min roll + attribute + item bonus ≥ DC), the app resolves the check or fight
   at once without the dice screen; odds show "✓ sure, no roll" and results carry `auto: True`.
+- **Scene layout**: `📍 name` heading + description; while a roll is pending the description folds
+  into a `📍 name` expander so the dice card (with the chosen action) comes first. Old stories
+  without `name` fall back to the id (English) or no heading (`app.location_name`).
 - **Monsters are one roll** (`dice_roll + attribute >= monster.strength`): won or lost, the
   encounter is over and the monster is removed from `st.session_state.locations`; then the
   location's non-flee choices appear. During the encounter only Fight and `is_flee`
