@@ -114,6 +114,21 @@ def monster_is_sure(monster, attributes):
     return min_roll(monster.get("dice_type", DEFAULT_DICE)) + a >= monster.get("strength", 0)
 
 
+def is_crossroads(loc):
+    """A decision point: a non-ending location with 2+ choices, no monster and no checks —
+    the hero just picks a way (the game reminds them what they carry)."""
+    loc = loc or {}
+    choices = [c for c in loc.get("choices", []) if not c.get("is_flee")]
+    return (not loc.get("is_end") and not loc.get("monster") and len(choices) >= 2
+            and not any("condition" in c for c in choices))
+
+
+def crossroads_band(n_locations):
+    """How many crossroads a new story should have: 2, or 1 under 8 locations (0 for toy
+    stories under 5)."""
+    return 0 if n_locations < 5 else 1 if n_locations < 8 else 2
+
+
 def legacy_fail_target(choice):
     """Old stories only: where a failed check used to send the hero (None for new stories)."""
     return choice.get("fail_target") or (choice.get("condition") or {}).get("fail_target")

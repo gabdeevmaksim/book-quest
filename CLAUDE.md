@@ -202,6 +202,12 @@ an existing story without generating.
 - **Scene layout**: `📍 name` heading + description; while a roll is pending the description folds
   into a `📍 name` expander so the dice card (with the chosen action) comes first. Old stories
   without `name` fall back to the id (English) or no heading (`app.location_name`).
+- **Crossroads**: `game_rules.is_crossroads(loc)` — non-ending, no monster, 2+ choices, no checks.
+  New stories need `crossroads_band(n)` of them (2; 1 under 8 locations) — enforced in
+  `_create_story` like names. The app shows an inventory reminder ("🧭 A moment to decide…") there.
+- **Dice card**: the challenge card (chosen action in large type, the check line, a big die) is
+  rendered into one `st.empty()`; `animate_roll(placeholder, dice, frame=card)` tumbles that die in
+  place, then shows the result for ~1 s before the outcome card.
 - **Monsters are one roll** (`dice_roll + attribute >= monster.strength`): won or lost, the
   encounter is over and the monster is removed from `st.session_state.locations`; then the
   location's non-flee choices appear. During the encounter only Fight and `is_flee`

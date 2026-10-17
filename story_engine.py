@@ -692,6 +692,10 @@ def build_prompts(theme, difficulty, length, title_hint="", language="English", 
           "link logically, no random teleports, no set of rooms the player can circle at zero "
           "cost, and most choices moving the story FORWARD. Every location must be reachable and "
           "able to reach an ending; no dead items.\n"
+        + f"PACING: not every location is a test. Include at least "
+          f"{R.crossroads_band(length)} CROSSROADS — locations with 2-3 choices and NO condition and "
+          "no monster, where the hero simply decides where to go or whom to trust (the game reminds "
+          "the player of their inventory there, so items can matter for the decision).\n"
         + 'NAMES: give EVERY location a "name" — a short place/situation title of 2-5 words in '
           "the story language, unique within the story; the game shows it as the scene heading.\n"
         + "CHALLENGES: every check and monster is resolved by ONE roll and is always passable — on "
@@ -911,6 +915,16 @@ def _create_story(theme, difficulty, length=14, title="", api_key=None, provider
                 continue
             save_story_file(story, tmp)
             ok, feedback, summary = gate_report(tmp, difficulty)
+            n_cross = sum(1 for loc in (story.get("locations") or {}).values() if R.is_crossroads(loc))
+            need_cross = R.crossroads_band(len(story.get("locations") or {}))
+            if n_cross < need_cross:
+                ok = False
+                summary["coherence"] = False
+                feedback.append(
+                    f"CROSSROADS — not every location should be a test: include at least {need_cross} "
+                    f"decision points (found {n_cross}) — locations with 2-3 choices, NO condition and "
+                    "no monster, where the hero just decides which way to go (e.g. a fork in the road, "
+                    "a choice of whom to trust); mention in the description what lies each way.")
             unnamed = unnamed_locations(story)
             if unnamed:                              # new stories must name every scene
                 ok = False

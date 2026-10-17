@@ -492,23 +492,23 @@ def odds_label(dice_type, check_value, attr_val, bonus=0):
     return f"≈{min(99, round(p * 100))}%"
 
 
-def animate_roll(placeholder, dice_type="1d6"):
+def animate_roll(placeholder, dice_type="1d6", frame=None):
+    """Tumble the dice in `placeholder`, then show the result. `frame(face_html)` wraps each
+    frame (e.g. in the challenge card, so the big die itself rolls in place)."""
+    frame = frame or (lambda inner: inner)
     num = int(dice_type.split("d")[0])
     result = roll_dice(dice_type)
-    for _ in range(16):
+    for i in range(18):
         faces = " ".join(random.choice(DICE_FACES) for _ in range(min(num, 3)))
-        placeholder.markdown(
-            f"<div style='text-align:center;font-size:3.4rem;letter-spacing:10px;"
-            f"padding:0.6rem 0;color:#d4a843'>{faces}</div>",
-            unsafe_allow_html=True,
-        )
-        time.sleep(0.055)
-    placeholder.markdown(
-        f"<div style='text-align:center;font-size:2rem;font-weight:bold;"
-        f"color:#d4a843;padding:0.6rem 0'>🎲 {result}</div>",
-        unsafe_allow_html=True,
-    )
-    time.sleep(0.45)
+        tilt = (-14, 10, -6, 12, -10, 6)[i % 6]
+        placeholder.markdown(frame(
+            f"<div style='font-size:5.5rem;line-height:1.1;color:#d4a843;display:inline-block;"
+            f"transform:rotate({tilt}deg)'>{faces}</div>"), unsafe_allow_html=True)
+        time.sleep(0.05 + i * 0.004)                       # slows down like a real tumble
+    placeholder.markdown(frame(
+        f"<div style='font-size:3.6rem;line-height:1.5;font-weight:bold;color:#f0c95a'>"
+        f"🎲 {result}</div>"), unsafe_allow_html=True)
+    time.sleep(0.9)
     return result
 
 
@@ -689,14 +689,15 @@ def _record_outcome(res, story):
         st.session_state.game_over = True
 
 
-def resolve_choice(choice, story):
+def resolve_choice(choice, story, placeholder=None, frame=None):
     """Roll for a checked choice. Win or lose, the hero moves on — failure just costs HP."""
     if "condition" not in choice:
         apply_choice_target(choice, story)
         return
     cond = choice["condition"]
     sure = R.check_is_sure(cond, st.session_state.attributes, st.session_state.get("inventory", []))
-    roll = None if sure else animate_roll(st.empty(), cond.get("dice_type", R.DEFAULT_DICE))
+    roll = None if sure else animate_roll(placeholder or st.empty(),
+                                          cond.get("dice_type", R.DEFAULT_DICE), frame)
     res = R.resolve_check(cond, st.session_state.attributes,
                           st.session_state.get("inventory", []), roll=roll)
     _record_outcome(res, story)
@@ -709,10 +710,11 @@ def resolve_choice(choice, story):
         apply_choice_target(choice, story)
 
 
-def resolve_combat(monster, loc_id, story):
+def resolve_combat(monster, loc_id, story, placeholder=None, frame=None):
     """One roll decides the whole encounter; either way it's over and the path opens."""
     sure = R.monster_is_sure(monster, st.session_state.attributes)
-    roll = None if sure else animate_roll(st.empty(), monster.get("dice_type", R.DEFAULT_DICE))
+    roll = None if sure else animate_roll(placeholder or st.empty(),
+                                          monster.get("dice_type", R.DEFAULT_DICE), frame)
     res = R.resolve_monster(monster, st.session_state.attributes, roll=roll)
     _record_outcome(res, story)
     st.session_state.locations[loc_id].pop("monster", None)
@@ -1484,23 +1486,30 @@ def main():
                 f"· <b>{odds}</b> · <i>lose: you still get past, but lose {fail} HP</i>"
             )
 
-        st.markdown(
-            f"<div style='background:#0c0a07;border:1px solid #3a2e14;"
-            f"border-radius:6px;padding:1.2rem 1rem;margin:0.8rem 0;text-align:center'>"
-            + (f"<div style='color:#d4c5a9;font-family:\"Special Elite\",Georgia,serif;"
-               f"font-size:1.05rem;margin-bottom:0.7rem'>{action}</div>" if action else "")
-            + f"<div style='color:#7a6a4a;font-size:0.85rem;font-family:monospace;"
-            f"margin-bottom:0.5rem'>{label}</div>"
-            f"<div style='font-size:4rem'>🎲</div></div>",
-            unsafe_allow_html=True,
-        )
+        def card(die_html):
+            """The challenge card; the die in its centre is what rolls."""
+            return (
+                f"<div style='background:#0c0a07;border:1px solid #3a2e14;border-radius:8px;"
+                f"padding:1.4rem 1.2rem;margin:0.8rem 0;text-align:center'>"
+                + (f"<div style='color:#e8dcc0;font-family:\"Special Elite\",Georgia,serif;"
+                   f"font-size:1.45rem;line-height:1.45;margin-bottom:0.8rem'>{action}</div>"
+                   if action else "")
+                + f"<div style='color:#a8946c;font-size:1.02rem;line-height:1.6;"
+                f"font-family:\"Share Tech Mono\",monospace;margin-bottom:0.6rem'>{label}</div>"
+                f"<div style='min-height:7.2rem;display:flex;align-items:center;"
+                f"justify-content:center'>{die_html}</div></div>")
+
+        dice_slot = st.empty()
+        dice_slot.markdown(card("<div style='font-size:5.5rem;line-height:1.1'>🎲</div>"),
+                           unsafe_allow_html=True)
 
         if st.button("🎲  Throw the Dice!", use_container_width=True):
             if pending:
-                resolve_choice(pending, story)
+                resolve_choice(pending, story, placeholder=dice_slot, frame=card)
                 st.session_state.pending_choice = None
             else:
-                resolve_combat(curr_loc["monster"], st.session_state.current_loc, story)
+                resolve_combat(curr_loc["monster"], st.session_state.current_loc, story,
+                               placeholder=dice_slot, frame=card)
                 st.session_state.pending_combat = False
             st.rerun()
 
@@ -1574,6 +1583,19 @@ def main():
 
     inventory = st.session_state.get("inventory", [])
     items_def = story.get("items", {})
+
+    # crossroads (no checks here, just a decision): remind the hero what they carry
+    if R.is_crossroads(curr_loc):
+        if inventory:
+            chips = " · ".join(f"{items_def.get(i, {}).get('icon', '📦')} "
+                               f"{items_def.get(i, {}).get('name', i)}" for i in inventory)
+            st.markdown(
+                f"<div style='background:#100d08;border:1px dashed #3a2e14;border-radius:6px;"
+                f"padding:0.6rem 0.9rem;margin:0.2rem 0 0.6rem 0;color:#c8b49a;font-size:0.92rem'>"
+                f"🧭 A moment to decide. <span style='color:#8a7a5a'>You carry:</span> {chips}</div>",
+                unsafe_allow_html=True)
+        else:
+            st.caption("🧭 A moment to decide — your pack is empty, so choose your path wisely.")
 
     for choice in curr_loc.get("choices", []):
         if choice.get("is_flee"):

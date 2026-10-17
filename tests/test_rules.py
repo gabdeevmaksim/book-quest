@@ -71,3 +71,14 @@ def test_no_roll_when_the_attribute_already_passes():
     m = {"name": "Rat", "strength": 6, "attribute": "agility"}
     assert R.monster_is_sure(m, {"agility": 5}) and R.resolve_monster(m, {"agility": 5})["auto"]
     assert not R.resolve_monster({**m, "strength": 9}, {"agility": 5})["auto"]
+
+
+def test_crossroads_detection():
+    import game_rules as R
+    fork = {"choices": [{"text": "a", "target_id": "x"}, {"text": "b", "target_id": "y"}]}
+    assert R.is_crossroads(fork)
+    assert not R.is_crossroads({**fork, "monster": {"name": "Rat"}})
+    assert not R.is_crossroads({"choices": fork["choices"][:1]})
+    assert not R.is_crossroads({"choices": fork["choices"] + [
+        {"text": "c", "target_id": "z", "condition": {"attribute": "agility", "check_value": 8}}]})
+    assert R.crossroads_band(14) == 2 and R.crossroads_band(6) == 1 and R.crossroads_band(1) == 0

@@ -156,6 +156,11 @@ place as already known before the player can have met it on that path; keep fact
   `condition`, outcome texts and `target_id`. After the encounter — won or lost — the
   location's non-flee choices appear, so **every monster location needs at least one
   non-flee onward choice**.
+- **Pacing — crossroads.** Not every location is a test. Include at least 2 **crossroads**
+  (1 in stories under 8 locations): locations with 2–3 choices, no `condition` and no monster,
+  where the hero simply decides which way to go or whom to trust. The game reminds the player of
+  their inventory there, so items they carry can inform the choice — mention in the description
+  what lies each way.
 - Every location has a **`name`**: a short, evocative place or situation title (2–5 words, in
   the story language, e.g. "The Flooded Crypt", "Пекарня на углу"). The game shows it as the
   scene's heading, so it must match the description and differ from the other locations' names.
