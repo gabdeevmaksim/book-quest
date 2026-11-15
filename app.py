@@ -162,6 +162,7 @@ import urllib.parse
 
 import visits     # visit / unique-visitor counter (SQLite in state/, salted hashes only)
 import feedback   # player feedback: file + Telegram (Streamlit-free, see feedback.py)
+import sounds     # sound effects: button click, dice roll, new item (see sounds.py)
 import quota as Q  # Gemini free-tier limits: per-model counters, capacity, one-at-a-time slot
 import hashlib
 import uuid
@@ -498,6 +499,7 @@ def animate_roll(placeholder, dice_type="1d6", frame=None):
     frame = frame or (lambda inner: inner)
     num = int(dice_type.split("d")[0])
     result = roll_dice(dice_type)
+    sounds.play_now("roll")                             # the clip follows this same 18-step tumble
     for i in range(18):
         faces = " ".join(random.choice(DICE_FACES) for _ in range(min(num, 3)))
         tilt = (-14, 10, -6, 12, -10, 6)[i % 6]
@@ -534,6 +536,7 @@ def apply_loot(story, loc):
             st.session_state.log.append(
                 f"🎒 Found: {item_icon(story, item_id)} {item_name(story, item_id)}"
             )
+            sounds.play("item")
     if loc.get("loot"):
         looted.add(loc_id)
 
@@ -641,6 +644,7 @@ def apply_choice_target(choice, story):
             st.session_state.log.append(
                 f"🎒 Received: {item_icon(story, item_id)} {item_name(story, item_id)}"
             )
+            sounds.play("item")
     # optional inline effects
     heal = choice.get("heals", 0)
     if heal:
@@ -994,6 +998,7 @@ def show_library():
     _left, mid, _right = st.columns([1, 1, 1])
     with mid:
         render_feedback("library")
+        sounds.toggle("library")
     render_visit_counter()
 
 
@@ -1335,7 +1340,8 @@ def main():
             select_story(path)
         else:
             st.query_params.clear()
-            st.session_state.deep_link_missing = wanted
+            # shown back to the visitor: keep only slug characters (the value comes from the URL)
+            st.session_state.deep_link_missing = re.sub(r"[^\w\-]", "", str(wanted))[:60]
 
     screen = st.session_state.get("screen", "library")
 
@@ -1363,6 +1369,7 @@ def main():
         go_to_library()
         st.rerun()
     with st.sidebar:
+        sounds.toggle("game")
         render_feedback("game")
     st.sidebar.markdown(
         f"<div style='text-align:center;margin-top:0.5rem'>"
@@ -1639,4 +1646,6 @@ def main():
 
 
 if __name__ == "__main__":
+    sounds.init()
     main()
+    sounds.flush()      # skipped when main() ends in st.rerun(); the queue then plays on the next run

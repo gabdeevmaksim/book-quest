@@ -32,11 +32,19 @@ COPY game_rules.py .
 COPY narrative_review.py .
 COPY quota.py .
 COPY visits.py .
+COPY sounds.py .
 COPY scripts/ ./scripts/
+# Drops root before running anything (see the script): the app never runs as root.
+COPY scripts/as-app.sh /usr/local/bin/as-app
+RUN chmod 755 /usr/local/bin/as-app
 COPY .streamlit/ ./.streamlit/
 COPY assets/ ./assets/
 COPY stories/ ./stories/
 COPY cyoa-skills/ ./cyoa-skills/
+
+# Visitors get a generic error message; types, messages and tracebacks go to the server log only.
+# (Set in the image, not in .streamlit/config.toml, so local runs still show full errors.)
+ENV STREAMLIT_CLIENT_SHOW_ERROR_DETAILS=none
 
 # Expose the port that Streamlit will run on
 EXPOSE 8501
@@ -45,4 +53,4 @@ EXPOSE 8501
 HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
 
 # Run the Streamlit application
-ENTRYPOINT ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+ENTRYPOINT ["as-app", "streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]

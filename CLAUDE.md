@@ -164,6 +164,16 @@ turns it off). CLI: `story_agent.py --revise <file or title> [--notes …] [--st
 Days in `QUEST_STATS_TZ` (default Europe/Stockholm). Library footer shows totals
 (`QUEST_SHOW_VISITS=0` hides). CLI: `python3 visits.py [days]`.
 
+**`sounds.py`** — sound effects (no music): `click` on every button, `roll` with the dice, `item`
+when something enters the backpack. Clips are `assets/sounds/*.mp3` (regenerate/tune with
+`python3 scripts/make_sounds.py`; `roll` follows `animate_roll`'s 18-step timing — change both
+together). `sounds.init()` runs at the top of every run and installs a client-side player plus one
+click listener for all `<button>`s (via `st.html(..., unsafe_allow_javascript=True)`);
+`sounds.play_now("roll")` sends at once, `sounds.play("item")` queues and `sounds.flush()` (end of
+run) sends — so a sound queued before `st.rerun()` plays on the next run. Player switch:
+`sounds.toggle()` (game sidebar + library footer), stored in `fbmeta_sound_on`; `QUEST_SOUND=0`
+disables the feature. `sounds.py` must ship with the app (it's in the Dockerfile).
+
 **`.streamlit/config.toml`** — dark theme in the app's colours (amber primary), so native
 widgets match the hand-styled CSS in `app.py`.
 
@@ -186,7 +196,25 @@ draft → validate → coherence → balance until all gates pass, then saves to
 `google-genai` + a free `GOOGLE_API_KEY`; runs on any server. `--audit <story.json>` gate-checks
 an existing story without generating.
 
+## Hardening (keep these)
+
+- The container drops root: the ENTRYPOINT is `as-app streamlit …` (`scripts/as-app.sh` → runs as the
+  owner of the bind-mounted repo, or `QUEST_UID:QUEST_GID`, default 1000, when root owns it; hands
+  `state/` and `stories/` to that user). Run maintenance commands the same way:
+  `docker compose exec quest-book as-app python3 …` — a plain `exec` runs as root and leaves
+  root-owned files (fixed at the next container start).
+- `STREAMLIT_CLIENT_SHOW_ERROR_DETAILS=none` in the Dockerfile: visitors never see tracebacks (look
+  in `docker compose logs quest-book`). Local runs still show full errors.
+- `Caddyfile` sends HSTS, `X-Content-Type-Options` and `Referrer-Policy`.
+- The deploy workflow refuses to run without the `DEPLOY_KNOWN_HOSTS` secret (pinned host key).
+
 ## Key Constraints
+
+- **Story text is untrusted** (model output from a visitor's theme; files synced from S3) and is
+  rendered with `unsafe_allow_html=True`. `story_engine.clean_story` neutralises HTML tags and
+  markdown images in every string; `load_story_file`, `list_stories` and `save_story_file` apply it,
+  so always go through them — never `json.load` a story straight into the UI. Any other
+  visitor-controlled text shown in HTML must be escaped the same way (`tests/test_security.py`).
 
 - A story is loaded into `st.session_state.active_story` when selected; `locations` is a
   deepcopy, so combat mutations don't touch the file on disk.
