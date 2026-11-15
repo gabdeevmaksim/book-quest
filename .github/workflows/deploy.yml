@@ -37,7 +37,7 @@ jobs:
         run: pip install -r requirements.txt pytest
 
       - name: Byte-compile
-        run: python -m py_compile app.py story_engine.py story_agent.py playtest.py compare_models.py feedback.py game_rules.py narrative_review.py quota.py visits.py scripts/regenerate_library.py
+        run: python -m py_compile app.py story_engine.py story_agent.py playtest.py compare_models.py feedback.py game_rules.py narrative_review.py quota.py visits.py sounds.py scripts/regenerate_library.py scripts/make_sounds.py
 
       - name: Run tests
         run: python -m pytest -q tests
@@ -70,11 +70,10 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          if [ -n "$DEPLOY_KNOWN_HOSTS" ]; then
-            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts      # pinned host key (recommended)
-          else
-            ssh-keyscan -H "$DEPLOY_HOST" > ~/.ssh/known_hosts 2>/dev/null
-          fi
+          # The droplet's identity must be pinned: without it the runner would trust whatever
+          # machine answers at that address (and hand it the .env). See DEPLOY.md, step 2.
+          [ -n "$DEPLOY_KNOWN_HOSTS" ] || { echo "::error::Secret DEPLOY_KNOWN_HOSTS is not set — run 'ssh-keyscan <droplet address>' and save the output as that secret (DEPLOY.md)"; exit 1; }
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           printf 'Host droplet\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/deploy_key\n  BatchMode yes\n  ConnectTimeout 20\n' \
             "$DEPLOY_HOST" "$DEPLOY_USER" > ~/.ssh/config
 

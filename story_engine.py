@@ -276,6 +276,58 @@ def env_api_key(provider):
 
 
 # ── story library IO ─────────────────────────────────────────────────────────
+# Story text is UNTRUSTED: a model writes it from a visitor's theme (and S3 can deliver files from
+# other machines), and the app shows it to every player through st.markdown(unsafe_allow_html=True).
+# So every string is neutralised on the way in and out of the library: nothing in it can open an
+# HTML tag (no injected markup, styles, iframes) or embed a remote markdown image (which would let
+# an author see players' IP addresses). Plain prose is untouched; a literal "<" still displays as "<".
+_TAG_OPEN = re.compile(r"<(?=[A-Za-z/!?])")
+
+
+def clean_text(s):
+    """Neutralise HTML tags and markdown images in one piece of story text (idempotent)."""
+    return _TAG_OPEN.sub("&lt;", s).replace("![", "!&#91;")
+
+
+def clean_story(obj):
+    """A copy of a story (or any JSON value) with every string value passed through clean_text.
+    Dict keys are ids and are left alone."""
+    if isinstance(obj, str):
+        return clean_text(obj)
+    if isinstance(obj, dict):
+        return {k: clean_story(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [clean_story(v) for v in obj]
+    return obj
+
+
+_META_CACHE = {}        # path -> ((mtime_ns, size), metadata): the library page re-reads only changed files
+
+
+def _story_meta(p):
+    st_ = os.stat(p)
+    key = (st_.st_mtime_ns, st_.st_size)
+    hit = _META_CACHE.get(p)
+    if hit and hit[0] == key:
+        return dict(hit[1])
+    with open(p, encoding="utf-8") as f:
+        d = json.load(f)
+    meta = clean_story({
+        "path": p,
+        "title": d.get("title", os.path.basename(p)),
+        "theme": d.get("theme", ""),
+        "difficulty": (d.get("difficulty") or "").lower(),
+        "goal": d.get("goal", ""),
+        "n": len(d.get("locations", {})),
+        "draft": bool(d.get("draft")),
+        "language": d.get("language", ""),
+        "language_level": d.get("language_level", ""),
+    })
+    meta["path"] = p
+    _META_CACHE[p] = (key, meta)
+    return dict(meta)
+
+
 def list_stories():
     """Metadata for every story in the library (stories/*.json)."""
     paths = sorted(p for p in glob.glob(os.path.join(STORIES_DIR, "*.json"))
@@ -283,28 +335,20 @@ def list_stories():
     out = []
     for p in paths:
         try:
-            d = json.load(open(p))
-            out.append({
-                "path": p,
-                "title": d.get("title", os.path.basename(p)),
-                "theme": d.get("theme", ""),
-                "difficulty": (d.get("difficulty") or "").lower(),
-                "goal": d.get("goal", ""),
-                "n": len(d.get("locations", {})),
-                "draft": bool(d.get("draft")),
-                "language": d.get("language", ""),
-                "language_level": d.get("language_level", ""),
-            })
+            out.append(_story_meta(p))
         except Exception as e:
             out.append({"path": p, "title": os.path.basename(p), "error": str(e),
                         "theme": "", "difficulty": "", "goal": "", "n": 0, "draft": False,
                         "language": "", "language_level": ""})
+    for gone in set(_META_CACHE) - set(paths):
+        if os.path.dirname(gone) == os.path.dirname(os.path.join(STORIES_DIR, "x")):
+            _META_CACHE.pop(gone, None)
     return out
 
 
 def load_story_file(path):
-    with open(path, "r") as f:
-        return json.load(f)
+    with open(path, "r", encoding="utf-8") as f:
+        return clean_story(json.load(f))
 
 
 def slugify(s):
@@ -327,8 +371,8 @@ def unique_story_path(title):
 
 def save_story_file(story, path):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(story, f, indent=2, ensure_ascii=False)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(clean_story(story), f, indent=2, ensure_ascii=False)
 
 
 # Git auto-push of stories was removed (deprecated): stories live on the server in stories/

@@ -1,0 +1,19 @@
+# Keep the build context small and secrets out of it. The image only COPYs named files
+# (see Dockerfile); at runtime docker-compose bind-mounts the repo, so nothing here is needed to build.
+.git
+.github
+.env
+.env.*
+.claude
+venv
+.venv
+env
+__pycache__
+**/__pycache__
+*.pyc
+state
+build
+docs
+tests
+*.skill
+.DS_Store

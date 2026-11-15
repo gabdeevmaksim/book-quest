@@ -4,6 +4,14 @@
 # here, Cloudflare proxy OFF / "DNS only").
 {$QUEST_DOMAIN} {
 	encode gzip
+	header {
+		# HTTPS only from now on (browsers remember for a year)
+		Strict-Transport-Security "max-age=31536000"
+		# never guess a file's type from its content
+		X-Content-Type-Options "nosniff"
+		# other sites learn only the origin, not the ?story=… link
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
 	reverse_proxy quest-book:8501
 }
 

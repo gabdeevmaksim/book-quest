@@ -121,8 +121,8 @@ generation at a time, and the free chain keeps working after the budget cap.
 First run after deploying, check that your key sees every model in the chains, then watch usage:
 
 ```bash
-docker compose exec quest-book python3 quota.py check-models
-docker compose exec quest-book python3 quota.py          # today's usage, budget, capacity
+docker compose exec quest-book as-app python3 quota.py check-models
+docker compose exec quest-book as-app python3 quota.py          # today's usage, budget, capacity
 ```
 
 If a model shows `✗ NOT AVAILABLE`, it is skipped automatically (and marked off for the day the
@@ -139,9 +139,9 @@ honoured) but have no outcome texts or hinted dead ends. Rebuild them once, on t
 ```bash
 cd /path/to/book-quest
 # (wrap in sh -c "…": some docker compose versions swallow --flags meant for the script)
-docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py --dry-run"   # the plan
-docker compose exec quest-book sh -c "python3 -u scripts/regenerate_library.py"         # do it (-u: live output)
-docker compose exec quest-book sh -c "python3 scripts/regenerate_library.py --only dust_and_rust.json"
+docker compose exec quest-book as-app sh -c "python3 scripts/regenerate_library.py --dry-run"   # the plan
+docker compose exec quest-book as-app sh -c "python3 -u scripts/regenerate_library.py"         # do it (-u: live output)
+docker compose exec quest-book as-app sh -c "python3 scripts/regenerate_library.py --only dust_and_rust.json"
 ```
 
 Before each story the script checks the monthly budget and today's request quota; if either
@@ -170,8 +170,8 @@ Read saved feedback on the droplet:
 
 ```bash
 cd /path/to/book-quest
-docker compose exec quest-book python3 feedback.py            # latest 20
-docker compose exec quest-book sh -c "python3 feedback.py --kind bug -n 50"
+docker compose exec quest-book as-app python3 feedback.py            # latest 20
+docker compose exec quest-book as-app sh -c "python3 feedback.py --kind bug -n 50"
 ```
 
 ## Domain + HTTPS
