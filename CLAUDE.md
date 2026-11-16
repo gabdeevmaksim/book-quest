@@ -165,7 +165,8 @@ Days in `QUEST_STATS_TZ` (default Europe/Stockholm). Library footer shows totals
 (`QUEST_SHOW_VISITS=0` hides). CLI: `python3 visits.py [days]`.
 
 **`sounds.py`** — sound effects (no music): `click` on every button, `roll` with the dice, `item`
-when something enters the backpack. Clips are `assets/sounds/*.mp3` (regenerate/tune with
+when something enters the backpack, `success` / `fail` with the outcome of a check or fight
+(queued in `_record_outcome`). Clips are `assets/sounds/*.mp3` (regenerate/tune with
 `python3 scripts/make_sounds.py`; `roll` follows `animate_roll`'s 18-step timing — change both
 together). `sounds.init()` runs at the top of every run and installs a client-side player plus one
 click listener for all `<button>`s (via `st.html(..., unsafe_allow_javascript=True)`);

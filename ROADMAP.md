@@ -143,6 +143,60 @@ phases land.
 - **Vocabulary helper** (deferred): per-location glossary written at generation time, word
   look-up, personal word list with story examples, copy / CSV (Anki) export.
 
+## Ideas (not decided — to think about)
+
+Noted 2026-11-16. None of these is planned yet.
+
+- **Story map (Mermaid)** — a script that turns a story's JSON into a Mermaid flowchart:
+  locations as boxes, choices as arrows, markers for checks, monsters, dead ends and endings.
+  For the author: see at a glance whether a story is a corridor, where the dead ends sit, which
+  endings are hard to reach (GitHub renders Mermaid in markdown). Adds nothing for the gates —
+  the JSON already is the graph. Variants: the generator drafts the map as an outline before
+  writing prose (one extra model call per story; the gain is planning first, not the format);
+  a "your path" diagram on the end screen for players (a full map would be a spoiler).
+- **A picture for each location** — generated illustration per scene. Open questions: cost per
+  story (N locations × image price, inside the monthly budget?), where the images live (S3 next
+  to the story), one consistent style per story, generation time on top of the text pipeline,
+  moderation of what the image model returns, regenerating pictures when a story is reworked.
+  A cheaper first step: one cover picture per story for the library card.
+- **Vocabulary by word frequency** — the reader's problem: too many unknown English words, the
+  story is hard to follow. Extends the "Vocabulary helper" in the backlog: pick the words to
+  explain by how rare they are (a frequency list per language) relative to the story's CEFR
+  level, instead of asking the model to guess. Tap or hover a rare word → short meaning (in the
+  story's language or the reader's own); optional per-scene word list; "words you met" on the
+  end screen. Also worth checking: do stories really stay inside their CEFR level? A frequency
+  check could become a gate ("too many words above B1").
+- **App instead of the browser** — steps from cheap to expensive: (1) installable web app
+  (PWA: icon on the home screen, full-screen) — hard to do well with Streamlit; (2) a thin
+  wrapper app around the site; (3) a real mobile/desktop app with its own interface, talking to
+  the story engine as a service — a rewrite of `app.py` (the engine, rules and gates are already
+  Streamlit-free). Decide first what the app should give that the site doesn't: offline play,
+  notifications, store presence, speed.
+- **Many players at once** — how it works today and where it stops: see "Scaling" below.
+- **Who may change a story; story versions** — today any player who rates a story 3★ or lower can
+  have it rewritten in place for everyone; no author is recorded. Ideas: remember who created a
+  story (the same hashed player id as the daily cap) and let only the creator — or enough
+  low ratings from different players — trigger a rework; keep reworks as a new version beside
+  the old one until the owner (or ratings) confirm it; a restore command
+  (`story_agent.py --restore <story> [version]`) over `stories/_archive/`; a version history
+  view; S3 bucket versioning as the off-server safety net.
+
+### Scaling (how many players at once)
+
+- One Streamlit process on one droplet. Every visitor gets an independent session, so playing is
+  cheap (reading JSON, a few page updates); the limits are the droplet's memory and CPU.
+- Creating or reworking a story is the expensive part (minutes, several model calls). On the
+  free tier only one runs at a time (`quota.generation_slot`, others see "try again in a
+  minute"); on the paid tier several run in parallel, bounded by the model's rate limits, the
+  monthly budget and the per-player daily cap (3).
+- `state/quota.json` is file-locked and `visits.db` is SQLite, so parallel sessions are safe there.
+  To check: the monthly usage ledger (`state/usage.json`) is read-modify-written without a lock —
+  two generations finishing at the same moment could drop one cost entry.
+- Known gap: two players reworking the SAME story at the same time on the paid tier — the last
+  one to finish wins. A per-story lock would close it.
+- To go further: a bigger droplet first; then several app containers behind Caddy (needs sticky
+  sessions and shared `state/` + `stories/`, i.e. S3/a small database instead of local files).
+
 ## Owner to-dos
 
 - **Models: paid Gemini Tier 1 with a cap in SEK, free tier after it** (decision: after the cap

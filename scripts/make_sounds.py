@@ -3,10 +3,12 @@
 
 Run from the repo root (needs numpy + ffmpeg):
     python3 scripts/make_sounds.py
-Three small mono clips, played in the browser by sounds.py:
-    click.mp3  any button press
-    roll.mp3   dice tumble + landing — timed to app.animate_roll (18 faces, slowing down)
-    item.mp3   something new in the backpack
+Five small mono clips, played in the browser by sounds.py:
+    click.mp3    any button press
+    roll.mp3     dice tumble + landing — timed to app.animate_roll (18 faces, slowing down)
+    item.mp3     something new in the backpack
+    success.mp3  a check or fight won (bright, rising)
+    fail.mp3     a check or fight lost (dark, falling)
 Edit the recipes below and re-run to change how they sound.
 """
 import os, subprocess
@@ -64,6 +66,29 @@ def item():
     put(b, bell(hz(86), 0.9), 0.14, 0.50)
     return b
 
+def pluck(freq, dur=0.9):                             # a soft, dull string
+    t = t_(dur); y = np.zeros_like(t)
+    for k in range(1, 6):
+        y += np.sin(2 * np.pi * freq * k * t) / k ** 1.4 * np.exp(-t * (3.0 + 1.5 * k))
+    return att(y, 4)
+
+def success():
+    """Bright and rising: a quick major arpeggio of bells."""
+    b = np.zeros(int(1.3 * SR))
+    for i, note in enumerate((74, 78, 81, 86)):        # D F# A D
+        put(b, bell(hz(note), 1.0), 0.085 * i, 0.40 + 0.05 * i)
+    return b
+
+def fail():
+    """Dark and falling: a dull thump, then two low notes stepping down. No bells."""
+    rng = np.random.RandomState(9); b = np.zeros(int(1.2 * SR)); t = t_(0.5)
+    ph = 2 * np.pi * np.cumsum(55 + 90 * np.exp(-t * 18)) / SR
+    put(b, att(np.sin(ph) * np.exp(-t * 8), 2), 0, 0.90)
+    put(b, filt(rng.uniform(-1, 1, len(t)), 700) * np.exp(-t * 24), 0, 0.60)
+    put(b, pluck(hz(51), 0.8), 0.10, 0.55)             # Eb3
+    put(b, pluck(hz(50), 0.9), 0.30, 0.60)             # D3 — a semitone drop
+    return b
+
 def save(name, sig):
     sig = sig / max(1e-9, np.abs(sig).max()) * 0.85
     n = int(0.01 * SR); sig[-n:] *= np.linspace(1, 0, n)
@@ -74,5 +99,5 @@ def save(name, sig):
     print(name, f"{len(sig) / SR:.2f}s", os.path.getsize(f"{OUT}/{name}.mp3"), "bytes")
 
 if __name__ == "__main__":
-    for name, fn in (("click", click), ("roll", roll), ("item", item)):
+    for name, fn in (("click", click), ("roll", roll), ("item", item), ("success", success), ("fail", fail)):
         save(name, fn())
