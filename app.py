@@ -689,6 +689,7 @@ def _record_outcome(res, story):
         st.session_state.log.append(
             f"{'✅' if res['passed'] else '❌'} {res['attribute'].upper()} check {verb}. {math}{hurt}")
     st.session_state.last_outcome = res
+    sounds.play("success" if res["passed"] else "fail")     # heard with the outcome card, after the roll
     if st.session_state.hp <= 0:
         st.session_state.game_over = True
 

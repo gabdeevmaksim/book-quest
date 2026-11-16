@@ -5,9 +5,10 @@ browser once per run as data URIs and played there with JavaScript:
 
 * click — entirely client-side: one listener on the page plays it for every <button> press,
   so there is no server round-trip and no per-button code.
-* roll / item — the app asks for them: `play_now("roll")` (sent at once, used by animate_roll)
-  and `play("item")` (queued; `flush()` sends the queue at the end of a run, so a sound asked
-  for just before `st.rerun()` still plays on the next run).
+* roll / item / success / fail — the app asks for them: `play_now("roll")` (sent at once, used by
+  animate_roll) and `play("item")`, `play("success")`, `play("fail")` (queued; `flush()` sends the
+  queue at the end of a run, so a sound asked for just before `st.rerun()` still plays on the
+  next run — the outcome sound therefore arrives with the outcome card, after the roll).
 
 Browsers only allow sound after the visitor has interacted with the page — every effect here
 follows a click, so that is always the case. The player's on/off choice lives in
@@ -23,8 +24,8 @@ from functools import lru_cache
 import streamlit as st
 
 SOUND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "sounds")
-NAMES = ("click", "roll", "item")
-VOLUME = {"click": 0.45, "roll": 0.8, "item": 0.7}
+NAMES = ("click", "roll", "item", "success", "fail")
+VOLUME = {"click": 0.45, "roll": 0.8, "item": 0.7, "success": 0.7, "fail": 0.8}
 PREF_KEY = "fbmeta_sound_on"        # the player's choice (kept across screens)
 QUEUE_KEY = "fbmeta_sound_queue"    # sounds asked for but not yet sent to the browser
 
@@ -81,7 +82,7 @@ _PLAY_JS = """<span class="qb-sfx"></span><script>
     if (!S || !S.play) { if (tries++ < 30) setTimeout(go, 100); return; }
     if (S.played[id]) return;
     S.played[id] = 1;
-    names.forEach(function(n, i){ setTimeout(function(){ S.play(n); }, i * 220); });
+    names.forEach(function(n, i){ setTimeout(function(){ S.play(n); }, i * 450); });
   }
   go();
 })();

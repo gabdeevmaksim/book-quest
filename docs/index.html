@@ -54,6 +54,10 @@
   h2{font-family:var(--serif);color:var(--amber-soft);font-size:1.4rem;letter-spacing:1px;
      text-align:center;margin:0 0 1.4rem}
 
+  /* trailer */
+  .promo{display:block;width:100%;max-width:860px;height:auto;aspect-ratio:16/9;margin:0 auto;
+         background:#0c0a07;border:1px solid var(--line);border-radius:6px}
+
   /* feature grid */
   .feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem}
   .feat{background:linear-gradient(135deg,var(--panel),var(--panel2));border:1px solid var(--line);
@@ -111,6 +115,20 @@
     </div>
   </div>
 </header>
+
+<section>
+  <div class="wrap">
+    <h2>See it in play</h2>
+    <!-- Starts muted (browsers only autoplay silent video); the player's speaker button turns the sound on. -->
+    <video class="promo" controls autoplay muted loop playsinline preload="metadata"
+           poster="quest-book-promo-poster.jpg" width="1920" height="1080"
+           aria-label="Quest Book trailer: a story scene, a dice check, a monster, and creating a new story">
+      <source src="quest-book-promo.mp4" type="video/mp4">
+      <a href="quest-book-promo.mp4">Watch the Quest Book trailer</a>
+    </video>
+    <p class="lang-note">🔊 It has sound — tap the speaker in the player.</p>
+  </div>
+</section>
 
 <section>
   <div class="wrap">
